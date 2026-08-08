@@ -283,7 +283,7 @@ com `docker-compose up -d`", mesmo que o escopo ainda esteja incompleto.
     Express acessíveis.
   - Rollback: branch isolada; `docker-compose down -v` reseta sem afetar o resto.
 
-- [ ] **MVP 1** — Domínio Proposta
+- [x] **MVP 1** — Domínio Proposta
   - Entrega: `Proposta` (domain/model) + `TipoAmortizacaoEnum`/`StatusPropostaEnum`,
     `CriarPropostaInputPort` + `CriarPropostaUsecase`, `PropostaOutputPort` +
     `PropostaRepositoryAdapter` (Spring Data MongoDB, `PropostaDocument` +
@@ -358,6 +358,47 @@ MVP aguardando aprovação explícita antes de seguir para o próximo.**
 > - Decisões/gotchas técnicos relevantes para a próxima sessão
 > - Próximo passo: ...
 > ```
+
+### 2026-08-08 — MVP 1 concluído, aguardando aprovação para MVP 2
+- Feito: branch `feature/mvp0-orquestracao-completa` pushada para o remoto
+  (PR aberto manualmente pelo usuário, link fornecido — `gh` CLI não está
+  disponível neste ambiente). Na sequência, implementado o domínio `Proposta`
+  completo nessa mesma branch: `Proposta` (Aggregate Root, `domain/model`),
+  `StatusPropostaEnum` (EM_ANDAMENTO/PROCESSADA), `TipoAmortizacaoEnum`
+  (SAC/PRICE), `CriarPropostaInputPort` + `CriarPropostaUsecase`,
+  `PropostaOutputPort` + `PropostaRepositoryAdapter` (Spring Data MongoDB,
+  `PropostaDocument` + `PropostaMongoRepository` + `PropostaMapper`),
+  `PropostaController` (`POST /api/propostas`) + `PropostaRequestDto`/
+  `PropostaResponseDto`, documentado no Swagger via anotações
+  `@Operation`/`@Tag`/`@Schema`. README atualizado com seção "Como demonstrar
+  — criação de Proposta" (Swagger → Mongo Express).
+- Estado atual: **validado de ponta a ponta** — `docker-compose down -v` +
+  `docker-compose up -d --build` frio sobe tudo saudável; `POST
+  /api/propostas` com `{"tipoAmortizacao":"SAC"}` retorna `201` com a
+  Proposta (`status: EM_ANDAMENTO`); documento confirmado na coleção
+  `propostas` do Mongo via `mongosh` direto no container; Swagger UI
+  responde 200 em `/swagger-ui/index.html`. Dados de teste limpos e stack
+  parado (`docker-compose down`, sem `-v`) ao final da sessão — para religar,
+  `docker-compose up -d`.
+- Decisões/gotchas técnicos relevantes para a próxima sessão:
+  - `PropostaController` depende só de `CriarPropostaInputPort` — **não** foi
+    criado endpoint de consulta (`GET /api/propostas/{id}`) neste MVP, pois
+    não havia porta de entrada definida para isso no roadmap e a demo do
+    MVP 1 usa Mongo Express para mostrar o documento salvo, não a API. Se
+    for necessário no futuro, criar um `BuscarPropostaInputPort` dedicado em
+    vez de o controller chamar `PropostaOutputPort` direto (quebraria a
+    regra de dependência hexagonal).
+  - `PropostaOutputPort` ficou só com `salvar()` por ora (sem `buscarPorId`),
+    pelo mesmo motivo acima — adicionar quando houver um consumidor real.
+  - Ambiente não tem `gh` CLI instalado (nem Bash nem PowerShell) — abertura
+    de PR precisa ser manual pelo link do GitHub ou instalar o CLI antes.
+  - Build/testado com `./gradlew compileKotlin` (sem suíte de testes, por
+    decisão do usuário) antes de subir o Docker — fluxo a repetir nos
+    próximos MVPs para não gastar tempo de build de imagem em erro de
+    compilação óbvio.
+- Próximo passo: commitar o MVP 1 (commits granulares em português), push,
+  **aguardar aprovação explícita do usuário** antes de abrir/atualizar PR e
+  antes de iniciar o MVP 2 (Outbox Pattern + fast-path pós-commit + Avro).
 
 ### 2026-08-08 — MVP 0 concluído, aguardando aprovação para MVP 1
 - Feito: esqueleto Kotlin/Gradle (pacotes hexagonais com stub), classe
