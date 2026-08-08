@@ -1,0 +1,152 @@
+# Orquestra a demo inteira: "docker-compose up -d" sobe infra + aplicação,
+# sem nenhum passo manual (replica-set do Mongo, tópicos Kafka e recursos do
+# LocalStack são provisionados por scripts de init dentro do próprio
+# compose — ver CLAUDE.md, "Revisão de consistência" e "Zero bootstrap manual").
+#
+# Portas expostas ao host:
+#   app          -> 8080  (Swagger em /swagger-ui.html, health em /actuator/health)
+#   mongo        -> 27017
+#   mongo-express-> 8081
+#   kafka        -> 9092  (listener externo PLAINTEXT_HOST)
+#   kafka-ui     -> 8082
+#   localstack   -> 4566
+
+services:
+  mongo:
+    image: mongo:7
+    hostname: mongo
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Container de execução única: inicializa o replica-set "rs0" assim que o
+  # mongod fica saudável. A app só sobe depois que este container termina
+  # com sucesso (ver depends_on do serviço "app").
+  mongo-init:
+    image: mongo:7
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - ./docker/mongo:/scripts:ro
+    entrypoint: ["bash", "/scripts/init-replica-set.sh"]
+    restart: "no"
+
+  kafka:
+    image: apache/kafka:3.7.0
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:9093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # Container de execução única: cria os tópicos "proposta-events" e
+  # "proposta-events.DLT" assim que o broker fica saudável — sem isso a
+  # publicação dependeria de auto-criação implícita de tópico (inconsistente
+  # entre versões/config de client).
+  kafka-init:
+    image: apache/kafka:3.7.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./docker/kafka:/scripts:ro
+    entrypoint: ["bash", "/scripts/init-topics.sh"]
+    restart: "no"
+
+  # Representa os recursos AWS gratuitos usados pela POC (Secrets Manager).
+  # O segredo é provisionado por init hook nativo do LocalStack
+  # (/etc/localstack/init/ready.d/), sem container/comando extra.
+  localstack:
+    image: localstack/localstack:3.8
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: secretsmanager
+      DEBUG: 0
+    volumes:
+      - ./docker/localstack/init:/etc/localstack/init/ready.d:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # Camada de demo/observação — permite mostrar o documento salvo no Mongo
+  # sem abrir terminal (ver CLAUDE.md).
+  mongo-express:
+    image: mongo-express:1
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_PORT: "27017"
+      # mongo-express 1.x renomeou a variável de "ME_CONFIG_BASICAUTH_ENABLED"
+      # para "ME_CONFIG_BASICAUTH" — a imagem vem com "true" por padrão, o que
+      # pediria login (admin/pass) antes de abrir a tela na demo.
+      ME_CONFIG_BASICAUTH: "false"
+    ports:
+      - "8081:8081"
+
+  # Camada de demo/observação — permite mostrar visualmente a mensagem
+  # chegando no tópico e indo para a DLT em caso de falha (ver CLAUDE.md).
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    ports:
+      - "8082:8080"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+      localstack:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+volumes:
+  mongo-data:
