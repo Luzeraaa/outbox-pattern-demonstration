@@ -68,8 +68,9 @@ docker-compose up -d
    mostre a mensagem chegando (serializada em Avro, chave de partição =
    id da Proposta).
 
-> A transição da Proposta para `PROCESSADA` (consumo da mensagem, idempotência,
-> Circuit Breaker/Retry/DLT) chega no MVP 4.
+5. Poucos instantes depois, o `PropostaListener` consome a mensagem e a
+   Proposta muda para `PROCESSADA` — recarregue o documento no Mongo Express
+   para ver a transição.
 
 ## Como demonstrar — resiliência do Scheduler (Kafka fora do ar)
 
@@ -92,6 +93,42 @@ e o Scheduler tenta de novo periodicamente, com backoff exponencial.
 > `outbox.scheduler.max-tentativas` (default 5, com backoff de 5s a 5min), o
 > registro vai para `FALHA_DEFINITIVA` — estado terminal, não é mais
 > reprocessado automaticamente (evita loop infinito numa "poison message").
+
+## Como demonstrar — idempotência e DLT (Circuit Breaker/Retry)
+
+O `PropostaListener` só transiciona a Proposta se ela ainda não estiver
+`PROCESSADA` — reprocessar a mesma mensagem não duplica efeito algum.
+
+**Idempotência** (reenviar a mesma mensagem):
+1. Crie uma Proposta e confirme no Mongo Express que ela virou `PROCESSADA`.
+2. Reinicie o consumo desde o início:
+   ```bash
+   docker stop outbox-pattern-demonstration-app-1
+   docker exec outbox-pattern-demonstration-kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh \
+     --bootstrap-server kafka:29092 --group proposta-listener --topic proposta-events \
+     --reset-offsets --to-earliest --execute
+   docker start outbox-pattern-demonstration-app-1
+   ```
+3. O Listener reconsome todas as mensagens do tópico, inclusive as já
+   processadas — a Proposta continua `PROCESSADA`, sem erro. Nos logs da
+   app aparece `"já está PROCESSADA — mensagem duplicada ignorada"`.
+
+**Circuit Breaker/Retry → DLT** (falha real forçada, ex.: Mongo fora do ar):
+1. Pare a app e o Mongo juntos, resete o offset do consumer group (mesmos
+   comandos acima) e suba a app de novo — o Listener tenta processar uma
+   mensagem sem conseguir falar com o Mongo.
+2. Nos logs aparecem as tentativas do Resilience4j
+   (`[Retry processar-proposta] tentativa N falhou...`); esgotadas as `3`
+   tentativas configuradas, a mensagem original vai para
+   `proposta-events.DLT`, visível no Kafka UI.
+3. Suba o Mongo de novo (`docker start outbox-pattern-demonstration-mongo-1`)
+   — o fluxo normal volta a funcionar para novas Propostas.
+
+> `resilience4j.circuitbreaker.instances.processar-proposta` abre o circuito
+> depois de várias falhas seguidas (mínimo de 5 chamadas na janela) — nos
+> logs aparece `[CircuitBreaker processar-proposta] CLOSED -> OPEN`, sinal de
+> que a app parou de tentar falar com a dependência instável por um tempo,
+> em vez de continuar martelando.
 > Fica visível no Mongo Express para investigação manual.
 
 ## Conectando com um cliente MongoDB (opcional)
