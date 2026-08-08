@@ -316,7 +316,7 @@ com `docker-compose up -d`", mesmo que o escopo ainda esteja incompleto.
   - Demo: criar proposta → mostrar mensagem chegando no Kafka UI em tempo real.
   - Rollback: outbox desabilitável por flag de config sem derrubar o MVP 1.
 
-- [ ] **MVP 3** — Scheduler de reprocessamento (fallback resiliente)
+- [x] **MVP 3** — Scheduler de reprocessamento (fallback resiliente)
   - Entrega: `OutboxReprocessamentoScheduler`, *claim* atômico
     (`findAndModify`, PENDENTE→EM_PROCESSAMENTO com dono+expiração), backoff
     exponencial, limite de tentativas com transição para `FALHA_DEFINITIVA`.
@@ -371,6 +371,63 @@ antes de seguir para o próximo.**
 > - Decisões/gotchas técnicos relevantes para a próxima sessão
 > - Próximo passo: ...
 > ```
+
+### 2026-08-08 — MVP 3 concluído, aguardando merge para iniciar MVP 4
+- Feito: seguido o fluxo de branch por MVP — `checkout develop` + `pull`
+  (trouxe o merge do PR do MVP 2) e criada `feature/mvp3-scheduler-reprocessamento`
+  a partir dela. `OutboxStatusEnum` ganhou `EM_PROCESSAMENTO`/`FALHA_DEFINITIVA`;
+  `OutboxEvent` ganhou `claimedBy`/`claimExpiraEm` (claim atômico) e
+  `proximaTentativaEm` (backoff). `OutboxOutputPort` ganhou
+  `reivindicarProximoPendente` (findAndModify atômico), `marcarComoEnviadoPorId`,
+  `reagendarAposFalha` e `marcarComoFalhaDefinitiva`, implementados no
+  `OutboxRepositoryAdapter`. `ReprocessarOutboxInputPort` +
+  `ReprocessarOutboxUsecase` (novo usecase de aplicação) orquestram o claim +
+  republish + decisão de backoff/limite. `OutboxReprocessamentoScheduler`
+  (`@Scheduled`, opt-in via `outbox.scheduler.enabled`) é o único ponto de
+  entrada/polling. README atualizado com o passo a passo de demo (derrubar
+  Kafka → criar Proposta → subir Kafka → Scheduler recupera sozinho).
+- Estado atual: **validado de ponta a ponta, incluindo os 3 cenários de
+  resiliência** (não só o happy path):
+  1. Fluxo feliz sem duplicação (ver gotcha #1 abaixo).
+  2. Kafka derrubado → Proposta criada (POST ainda responde `201` em ~3s,
+     não trava) → OutboxEvent fica PENDENTE com tentativas/backoff reais
+     incrementando a cada falha genuína do Scheduler → Kafka religado →
+     Scheduler publica sozinho em poucos segundos, OutboxEvent vira ENVIADO,
+     mensagem confirmada no tópico exatamente uma vez, claim limpo.
+  3. "Poison message" (eventType desconhecido inserido direto no Mongo) vai
+     direto para FALHA_DEFINITIVA sem gastar tentativas de retry, e não é
+     reprocessada de novo depois (estado terminal confirmado, sem loop).
+  Stack sobe limpo com `docker-compose down -v` + `up -d --build`. Dados de
+  teste limpos, stack parado ao final da sessão.
+- **Dois bugs reais encontrados e corrigidos durante a validação (não só
+  hipóteses de code review — reproduzidos rodando de verdade):**
+  1. **Fast-path vs. Scheduler duplicavam publicação em quase toda criação,
+     não só em falhas genuínas.** Causa: a query de claim do Scheduler
+     considerava qualquer PENDENTE elegível imediatamente, então um tick do
+     `@Scheduled` (a cada 5s) quase sempre alcançava o registro antes do
+     fast-path terminar de publicar. Corrigido com um período de carência
+     (`outbox.scheduler.grace-period-segundos`, default 6s): um PENDENTE de
+     1ª tentativa só fica elegível pro Scheduler depois de "envelhecer" esse
+     tanto, dando tempo do fast-path terminar. Reentativas (que já têm
+     `proximaTentativaEm`) continuam elegíveis sem essa carência, porque ali
+     o fast-path já comprovadamente falhou.
+  2. **`marcarComoFalhaDefinitiva` não persistia o contador final de
+     `tentativas`** — o registro ficava com o penúltimo valor, escondendo a
+     tentativa que de fato estourou o limite. Corrigido passando `tentativas`
+     como parâmetro explícito para a porta/adapter.
+  3. **Descoberta adicional durante a implementação (corrigida antes de virar
+     bug em produção)**: `PropostaProducer.publicar` original era
+     fire-and-forget (`kafkaTemplate.send` sem aguardar o `CompletableFuture`)
+     — nesse modelo, o fast-path/Scheduler nunca veriam uma falha do Kafka
+     (a exceção aconteceria de forma assíncrona, descartada). Corrigido para
+     bloquear no `.get(timeout)` do futuro retornado, com `MAX_BLOCK_MS_CONFIG`
+     baixo no producer (3s) para não herdar o default de 60s do client e
+     travar a request/rodada do Scheduler quando o Kafka está fora do ar.
+- Próximo passo: **aguardar o usuário confirmar que o merge de
+  `feature/mvp3-scheduler-reprocessamento` → `develop` foi feito**. Só então:
+  `checkout develop` + `pull`, criar `feature/mvp4-listener-idempotente-dlt`
+  (ou nome equivalente) a partir dela, e iniciar o MVP 4 (Listener idempotente
+  + Circuit Breaker/Retry + DLT).
 
 ### 2026-08-08 — MVP 2 concluído, aguardando merge para iniciar MVP 3
 - Feito: seguido o novo fluxo de branch por MVP — `checkout develop` + `pull`
