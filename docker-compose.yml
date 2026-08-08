@@ -1,7 +1,10 @@
 # Orquestra a demo inteira: "docker-compose up -d" sobe infra + aplicação,
-# sem nenhum passo manual (replica-set do Mongo, tópicos Kafka e recursos do
-# LocalStack são provisionados por scripts de init dentro do próprio
-# compose — ver CLAUDE.md, "Revisão de consistência" e "Zero bootstrap manual").
+# sem nenhum passo manual (replica-set do Mongo e tópicos Kafka são
+# provisionados por scripts de init dentro do próprio compose — ver
+# CLAUDE.md, "Revisão de consistência" e "Zero bootstrap manual").
+#
+# Sem LocalStack/recursos AWS nesta POC (decisão em 08/2026 — ver CLAUDE.md,
+# "Revisão: remoção do LocalStack/AWS"): desnecessário para a demo.
 #
 # Portas expostas ao host:
 #   app          -> 8080  (Swagger em /swagger-ui.html, health em /actuator/health)
@@ -9,7 +12,6 @@
 #   mongo-express-> 8081
 #   kafka        -> 9092  (listener externo PLAINTEXT_HOST)
 #   kafka-ui     -> 8082
-#   localstack   -> 4566
 
 services:
   mongo:
@@ -79,25 +81,6 @@ services:
     entrypoint: ["bash", "/scripts/init-topics.sh"]
     restart: "no"
 
-  # Representa os recursos AWS gratuitos usados pela POC (Secrets Manager).
-  # O segredo é provisionado por init hook nativo do LocalStack
-  # (/etc/localstack/init/ready.d/), sem container/comando extra.
-  localstack:
-    image: localstack/localstack:3.8
-    ports:
-      - "4566:4566"
-    environment:
-      SERVICES: secretsmanager
-      DEBUG: 0
-    volumes:
-      - ./docker/localstack/init:/etc/localstack/init/ready.d:ro
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
-
   # Camada de demo/observação — permite mostrar o documento salvo no Mongo
   # sem abrir terminal (ver CLAUDE.md).
   mongo-express:
@@ -137,8 +120,6 @@ services:
         condition: service_completed_successfully
       kafka-init:
         condition: service_completed_successfully
-      localstack:
-        condition: service_healthy
     ports:
       - "8080:8080"
     healthcheck:

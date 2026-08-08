@@ -167,9 +167,10 @@ Regras da camada de domínio (não negociáveis):
 - Kafka real (KRaft, sem Zookeeper) direto no docker-compose — NÃO via MSK do
   LocalStack. Motivo: MSK não está no tier gratuito do LocalStack; a própria doc do
   LocalStack recomenda o padrão "self-managed Kafka" ao lado do LocalStack.
-- LocalStack (free/Hobby) para recursos AWS gratuitos: Secrets Manager (credenciais),
-  provisionado via init hook — cumpre o requisito de "criação de recursos AWS via
-  LocalStack" sem depender de plano pago.
+- **Sem LocalStack/recursos AWS nesta POC** (decisão em 08/2026 — ver seção
+  "Revisão: remoção do LocalStack/AWS" mais abaixo). Estava planejado
+  Secrets Manager via LocalStack para credenciais, mas foi decidido que é
+  desnecessário para o objetivo da demo — complexidade que não se paga.
 - Avro: schema em `src/main/avro/*.avsc` (padrão de mercado do plugin Gradle Avro,
   que gera as classes automaticamente em `build/generated-main-avro-java` durante o
   build), SEM Schema Registry (é demonstrativo). Arquivo versionado no próprio
@@ -255,6 +256,29 @@ Pontos que estavam faltando e foram corrigidos nesta revisão:
 6. Faltava política de limpeza do outbox (TTL) — sem isso a coleção cresce sem
    limite para sempre, mesmo após o evento já ter sido entregue.
 
+## Revisão: remoção do LocalStack/AWS (feita em 08/2026)
+O MVP 0 previa LocalStack (Secrets Manager) desde o início, com o MVP 5 fazendo
+a app efetivamente ler credenciais de lá. O usuário decidiu **pular o MVP 5**:
+recursos AWS (IAM/Secrets Manager) são desnecessários para o objetivo desta
+demo — não há credencial sensível real para gerenciar numa POC, e a
+complexidade extra (container, init hook, mais uma peça pra explicar na
+apresentação) não se paga.
+
+Como nada mais no projeto dependia do LocalStack além do Secrets Manager
+planejado (nenhum outro recurso AWS era usado), a consequência prática foi
+**remover o LocalStack por completo**, não só pular o MVP 5:
+- `docker-compose.yml`: serviço `localstack` removido, junto com a
+  dependência do serviço `app` nele.
+- `docker/localstack/` (init hook do secret) removido.
+- README.md e a tabela de pré-requisitos deste arquivo atualizados para não
+  mencionar mais LocalStack/AWS CLI/awslocal.
+- "Stack confirmada" (acima) atualizada para refletir a stack real do
+  projeto: Mongo + Kafka + Avro + Resilience4j, sem nenhum componente AWS.
+
+Isso está alinhado com o objetivo do projeto no topo deste arquivo: qualquer
+peça que adicione complexidade sem servir diretamente à demo é um problema a
+resolver, não um detalhe menor.
+
 ## Pré-requisitos e como usar/conectar cada ferramenta
 | Ferramenta | Necessário para | Como usar/conectar |
 |---|---|---|
@@ -267,14 +291,20 @@ Pontos que estavam faltando e foram corrigidos nesta revisão:
 | Kafka UI (incluso no compose) | Ver mensagens/tópicos/DLT na demo | Abrir no navegador, porta documentada no README |
 | Mongo Express (incluso no compose) | Ver documentos no Mongo na demo | Abrir no navegador, porta documentada no README |
 | Swagger UI (embutido na app) | Disparar os endpoints na demo | Abrir no navegador, porta documentada no README |
-| AWS CLI / awslocal (opcional) | Inspecionar recursos no LocalStack via terminal | Não é necessário para a demo; só para curiosidade técnica |
 
 > As portas exatas de cada serviço serão fixadas e documentadas no README.md assim
 > que o docker-compose do MVP 0 existir — não adivinhar/hardcodar aqui.
 
 ## Entregáveis finais (últimos MVPs)
-- Documentação técnica em PDF (por classe/método/usecase/domínio, linguagem ubíqua).
-- Fluxograma da funcionalidade em PDF.
+> Ajustado em 08/2026: 2 PDFs (não 3) — o fluxograma vira parte do PDF de
+> apresentação, não um arquivo à parte. Ver roadmap MVP 6.
+- **PDF técnico**: documentação por classe/método/usecase/domínio, linguagem
+  ubíqua — público-alvo é quem for dar manutenção no código.
+- **PDF de apresentação para liderança**: visão geral não-técnica do que é o
+  Outbox Pattern e por que ele existe, fluxograma do fluxo de eventos,
+  decisões/trade-offs de arquitetura em linguagem acessível (ex.: Polling vs
+  CDC, at-least-once + idempotência) — público-alvo é liderança não-técnica
+  ou semi-técnica, o objetivo original do projeto (ver topo deste arquivo).
 - README.md completo: pré-requisitos, como subir, portas de cada serviço, variáveis
   de conexão ao Mongo local, sugestão de cliente MongoDB gratuito, como demonstrar
   cada etapa do fluxo (incluindo o cenário de falha → DLT).
@@ -337,19 +367,24 @@ com `docker-compose up -d`", mesmo que o escopo ainda esteja incompleto.
   - Rollback: listener em consumer group isolado; desabilitar não quebra a
     publicação.
 
-- [ ] **MVP 5** — Recursos AWS via LocalStack
-  - Entrega: Secrets Manager provisionado via init hook, app lendo credenciais
-    de lá.
-  - Pronto quando: sobe junto com o resto, sem passo manual de AWS CLI.
-  - Demo: app funcionando com dados vindos do Secrets Manager (+ awslocal opcional
-    para quem quiser ver por baixo dos panos).
-  - Rollback: fallback para variável de ambiente local se o Secrets Manager falhar,
-    evitando travar a demo.
+- [x] ~~**MVP 5** — Recursos AWS via LocalStack~~ **PULADO** (decisão do
+  usuário em 08/2026)
+  - Motivo: Secrets Manager/IAM via LocalStack é complexidade desnecessária
+    para o objetivo da demo — a app não tem nenhuma credencial sensível real
+    para gerenciar nesta POC. LocalStack (container + init hook do secret,
+    que nunca chegou a ser lido pela app) foi removido do docker-compose,
+    do README e da tabela de pré-requisitos — nada sobra rodando sem
+    propósito na demo (ver "Revisão: remoção do LocalStack/AWS" abaixo).
 
-- [ ] **MVP 6** — Documentação (PDF técnico + fluxograma) + README final
-  - Entrega: PDF técnico, PDF fluxograma, README completo.
-  - Pronto quando: alguém novo consegue rodar o projeto só lendo o README.
-  - Demo: apresentação guiada pelo README + fluxograma.
+- [ ] **MVP 6** — Documentação (2 PDFs) + README final
+  - Entrega: **PDF técnico** (documentação por classe/método/usecase/domínio,
+    linguagem ubíqua) e **PDF de apresentação para liderança** (visão geral
+    não-técnica, fluxograma do fluxo de eventos, trade-offs de arquitetura
+    em linguagem acessível), README completo.
+  - Pronto quando: alguém novo consegue rodar o projeto só lendo o README; os
+    2 PDFs estão prontos para envio/impressão antes da apresentação.
+  - Demo: apresentação guiada pelo PDF de apresentação (fluxograma incluso).
+  - Rollback: só documentação, não afeta código nem infra.
 
 - [ ] **MVP 7** — GitHub Actions + revisão final dos commits
   - Entrega: workflow develop→staging automático, gate manual obrigatório para main.
@@ -371,6 +406,34 @@ antes de seguir para o próximo.**
 > - Decisões/gotchas técnicos relevantes para a próxima sessão
 > - Próximo passo: ...
 > ```
+
+### 2026-08-08 — MVP 5 pulado por decisão do usuário, MVP 6 redefinido
+- Feito: usuário pediu para pular o MVP 5 (recursos AWS/LocalStack
+  desnecessários para a demo) e redefiniu a entrega do MVP 6 para 2 PDFs
+  (técnico + apresentação para liderança, sem PDF de fluxograma separado —
+  o fluxograma vira parte do PDF de apresentação). Perguntado ao usuário o
+  que fazer com o container LocalStack já existente desde o MVP 0; resposta:
+  os recursos a pular eram especificamente IAM/Secrets Manager, mantendo no
+  LocalStack só o necessário para rodar o projeto — como nada mais usa
+  LocalStack, a consequência foi removê-lo por completo. Removidos:
+  `docker-compose.yml` (serviço `localstack` + dependência do `app`),
+  `docker/localstack/` (init hook do secret), menções no README (linha do
+  "Como rodar", tabela de portas, seção de desenvolvimento) e no CLAUDE.md
+  (tabela de pré-requisitos, "Stack confirmada"). Adicionada seção "Revisão:
+  remoção do LocalStack/AWS" documentando a decisão. Roadmap: MVP 5 marcado
+  como pulado (`[x] ~~riscado~~`), MVP 6 reescrito, "Entregáveis finais"
+  atualizado para 2 PDFs.
+- Estado atual: nenhuma mudança de código de aplicação nesta entrada, só
+  infra (compose) e documentação. Stack não foi resubida/revalidada ainda
+  nesta sessão (a remoção do LocalStack é mecânica — tirar um serviço não
+  referenciado por mais ninguém no compose — mas fica pendente confirmar
+  com `docker-compose up -d --build` antes de considerar 100% validado).
+- Próximo passo: validar que `docker-compose up -d --build` ainda sobe tudo
+  saudável sem o LocalStack, commitar (branch atual ainda é
+  `feature/mvp4-listener-idempotente-dlt`, PR do MVP 4 já aberto — avaliar
+  com o usuário se esse ajuste de roadmap/infra entra no mesmo PR do MVP 4
+  ou vira commit/PR próprio antes do merge), e só então aguardar confirmação
+  de merge para seguir ao MVP 6.
 
 ### 2026-08-08 — MVP 4 concluído, aguardando merge para iniciar MVP 5
 - Feito: seguido o fluxo de branch por MVP — `checkout develop` + `pull`
@@ -440,11 +503,15 @@ antes de seguir para o próximo.**
   podem falhar silenciosamente sem erro de boot** — sempre validar rodando de
   verdade (log/thread/consumer group real), nunca só pela ausência de erro de
   compilação ou de exception no startup.
+- **Atualização pós-entrada**: usuário decidiu pular o MVP 5 (ver "Revisão:
+  remoção do LocalStack/AWS") e redefiniu o MVP 6 para 2 PDFs (técnico +
+  apresentação para liderança) — roadmap e entregáveis finais já refletem
+  isso. LocalStack removido do compose/README nesta mesma sessão.
 - Próximo passo: **aguardar o usuário confirmar que o merge de
   `feature/mvp4-listener-idempotente-dlt` → `develop` foi feito**. Só então:
-  `checkout develop` + `pull`, criar `feature/mvp5-localstack-secrets-manager`
-  (ou nome equivalente) a partir dela, e iniciar o MVP 5 (Recursos AWS via
-  LocalStack — Secrets Manager).
+  `checkout develop` + `pull`, criar `feature/mvp6-documentacao-pdfs`
+  (ou nome equivalente) a partir dela, e iniciar o MVP 6 (PDF técnico + PDF
+  de apresentação para liderança + README final).
 
 ### 2026-08-08 — MVP 3 concluído, aguardando merge para iniciar MVP 4
 - Feito: seguido o fluxo de branch por MVP — `checkout develop` + `pull`

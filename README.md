@@ -17,9 +17,9 @@ docker-compose up -d
 ```
 
 Isso sobe a infraestrutura inteira **e a aplicação**, com o Mongo já em
-replica-set, os tópicos Kafka já criados e os recursos AWS já provisionados no
-LocalStack — sem nenhum comando manual adicional. Leva cerca de 1 a 2 minutos
-na primeira vez (build da imagem da aplicação); nas próximas é bem mais rápido.
+replica-set e os tópicos Kafka já criados — sem nenhum comando manual
+adicional. Leva cerca de 1 a 2 minutos na primeira vez (build da imagem da
+aplicação); nas próximas é bem mais rápido.
 
 Para acompanhar a subida:
 
@@ -47,7 +47,6 @@ docker-compose up -d
 | **Mongo Express** | http://localhost:8081 | Ver o documento da Proposta e do OutboxEvent salvos no Mongo. |
 | Mongo (driver/Compass) | `mongodb://localhost:27017/outbox_demo?replicaSet=rs0` | Inspecionar dados manualmente fora da demo, se quiser (ver seção abaixo). |
 | Kafka (bootstrap externo) | `localhost:9092` | Conectar um client Kafka externo à máquina, se necessário. |
-| LocalStack | http://localhost:4566 | Endpoint AWS local (Secrets Manager) — uso interno da aplicação, não precisa abrir na demo. |
 
 ## Como demonstrar — criação de Proposta + Outbox Pattern
 
@@ -149,7 +148,7 @@ para demonstrar o projeto. Para desenvolver:
 
 - **JDK 21** configurado como Project SDK.
 - **IntelliJ IDEA**: abrir a pasta pelo `build.gradle.kts`.
-- Para rodar só a infra (Mongo/Kafka/LocalStack) e a aplicação direto pela IDE,
+- Para rodar só a infra (Mongo/Kafka) e a aplicação direto pela IDE,
   suba os serviços de infra e aponte a aplicação para `localhost` nas portas
   acima (os hosts internos `mongo`/`kafka` só resolvem dentro da rede do
   compose).
