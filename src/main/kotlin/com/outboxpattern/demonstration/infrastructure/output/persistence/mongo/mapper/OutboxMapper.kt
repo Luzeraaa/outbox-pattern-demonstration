@@ -21,6 +21,9 @@ object OutboxMapper {
 			tentativas = outboxEvent.tentativas,
 			createdAt = outboxEvent.createdAt,
 			updatedAt = outboxEvent.updatedAt,
+			claimedBy = outboxEvent.claimedBy,
+			claimExpiraEm = outboxEvent.claimExpiraEm,
+			proximaTentativaEm = outboxEvent.proximaTentativaEm,
 		)
 
 	fun paraDominio(document: OutboxDocument): OutboxEvent =
@@ -33,5 +36,8 @@ object OutboxMapper {
 			tentativas = document.tentativas,
 			createdAt = document.createdAt,
 			updatedAt = document.updatedAt,
+			claimedBy = document.claimedBy,
+			claimExpiraEm = document.claimExpiraEm,
+			proximaTentativaEm = document.proximaTentativaEm,
 		)
 }
