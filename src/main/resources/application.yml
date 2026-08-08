@@ -9,7 +9,11 @@ spring:
     # Replica-set single-node — necessário para transação multi-documento
     # (Proposta + OutboxEvent na mesma transação Mongo, ver CLAUDE.md).
     # O host "mongo" resolve via DNS interno do docker-compose.
-    uri: mongodb://mongo:27017/outbox_demo?replicaSet=rs0
+    # serverSelectionTimeoutMS reduzido do default do driver (30s) para 5s:
+    # com Mongo indisponível, cada tentativa do Circuit Breaker/Retry (MVP 4)
+    # ou do Scheduler (MVP 3) esperaria 30s antes de falhar - inaceitável
+    # tanto pra demo quanto pra latência real de detecção de falha.
+    uri: mongodb://mongo:27017/outbox_demo?replicaSet=rs0&serverSelectionTimeoutMS=5000
 
   kafka:
     bootstrap-servers: kafka:29092
@@ -47,6 +51,29 @@ outbox:
     max-tentativas: 5
     backoff-base-segundos: 5
     backoff-max-segundos: 300
+
+proposta:
+  listener:
+    # Rollback (ver CLAUDE.md, roadmap MVP 4): false desliga só o consumo,
+    # a publicação (fast-path/Scheduler) continua funcionando normalmente.
+    enabled: true
+
+resilience4j:
+  retry:
+    instances:
+      processar-proposta:
+        max-attempts: 3
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+  circuitbreaker:
+    instances:
+      processar-proposta:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
 
 springdoc:
   swagger-ui:

@@ -20,4 +20,7 @@ class PropostaRepositoryAdapter(
 		val salvo = repository.save(document)
 		return PropostaMapper.paraDominio(salvo)
 	}
+
+	override fun buscarPorId(id: String): Proposta? =
+		repository.findById(id).map(PropostaMapper::paraDominio).orElse(null)
 }
