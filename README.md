@@ -49,6 +49,22 @@ docker-compose up -d
 | Kafka (bootstrap externo) | `localhost:9092` | Conectar um client Kafka externo à máquina, se necessário. |
 | LocalStack | http://localhost:4566 | Endpoint AWS local (Secrets Manager) — uso interno da aplicação, não precisa abrir na demo. |
 
+## Como demonstrar — criação de Proposta
+
+1. Abra o [Swagger UI](http://localhost:8080/swagger-ui.html) e expanda
+   `POST /api/propostas`.
+2. Clique em "Try it out", informe o corpo, por exemplo:
+   ```json
+   { "tipoAmortizacao": "SAC" }
+   ```
+3. Clique em "Execute" — a resposta `201 Created` traz a Proposta já com `id`
+   e status `EM_ANDAMENTO`.
+4. Abra o [Mongo Express](http://localhost:8081), coleção `outbox_demo` →
+   `propostas`, e mostre o documento salvo.
+
+> A publicação do evento no Kafka (Outbox Pattern) e a transição para
+> `PROCESSADA` chegam no MVP 2/4 — por enquanto a Proposta só é persistida.
+
 ## Conectando com um cliente MongoDB (opcional)
 
 Para inspecionar os dados fora da demo, qualquer cliente MongoDB gratuito serve —
