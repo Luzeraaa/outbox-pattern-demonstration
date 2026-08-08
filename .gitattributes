@@ -1,0 +1,9 @@
+# Scripts que rodam dentro de containers Linux (build da imagem via gradlew,
+# init hooks do compose) PRECISAM de LF — sem isso, "core.autocrlf=true" no
+# Windows reescreve o shebang com CRLF a cada checkout e quebra o container
+# com "not found" (visto na prática ao trocar de branch nesta sessão).
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Script .bat é Windows-only, mantém CRLF nativo.
+gradlew.bat text eol=crlf

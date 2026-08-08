@@ -305,7 +305,7 @@ com `docker-compose up -d`", mesmo que o escopo ainda esteja incompleto.
   - Demo: Swagger → POST → Mongo Express mostra o documento salvo.
   - Rollback: reverte só a branch do MVP 1; MVP 0 continua de pé.
 
-- [ ] **MVP 2** — Outbox Pattern + fast-path pós-commit + Avro
+- [x] **MVP 2** — Outbox Pattern + fast-path pós-commit + Avro
   - Entrega: `OutboxEvent`/`OutboxDocument`/`OutboxRepositoryAdapter` (transação
     Mongo junto com Proposta), `PropostaCriadaEvent` (domain event, payload
     autocontido), `PropostaProducer` publicando via
@@ -371,6 +371,69 @@ antes de seguir para o próximo.**
 > - Decisões/gotchas técnicos relevantes para a próxima sessão
 > - Próximo passo: ...
 > ```
+
+### 2026-08-08 — MVP 2 concluído, aguardando merge para iniciar MVP 3
+- Feito: seguido o novo fluxo de branch por MVP — `checkout develop` + `pull`
+  (trouxe o merge do PR do MVP 0+1) e criada `feature/mvp2-outbox-pattern` a
+  partir dela. Implementado o núcleo do Outbox Pattern: `OutboxEvent` +
+  `OutboxStatusEnum` (domain/model, só PENDENTE/ENVIADO neste MVP —
+  EM_PROCESSAMENTO/FALHA_DEFINITIVA ficam para o MVP 3, quando o Scheduler
+  de fato existir), `PropostaCriadaEvent` (domain/event, payload autocontido:
+  propostaId/status/tipoAmortizacao/criadaEm), `OutboxOutputPort` +
+  `PropostaEventPublisherOutputPort` (portas de saída), `OutboxDocument` +
+  `OutboxMongoRepository` + `OutboxMapper` + `OutboxRepositoryAdapter`
+  (persistência Mongo, `marcarComoEnviado` via `MongoTemplate` direto — update
+  pontual, não recarrega o documento), schema Avro em
+  `src/main/avro/proposta_criada_event.avsc` (`PropostaCriadaEventAvro`, sem
+  Schema Registry), `PropostaProducer` (implementa
+  `PropostaEventPublisherOutputPort`, serializa Avro binário manualmente e
+  publica em `proposta-events` usando `propostaId` como chave de partição),
+  `KafkaConfig` (ProducerFactory `<String, ByteArray>`) e `MongoConfig`
+  (`MongoTransactionManager`, necessário para o `@Transactional` funcionar).
+  `CriarPropostaUsecase` passou a gravar Proposta + OutboxEvent na mesma
+  transação Mongo e a expor `aoConfirmarCriacao` (`@TransactionalEventListener`,
+  `AFTER_COMMIT`) como fast-path: publica no Kafka só depois do commit e, se
+  publicar com sucesso, marca o OutboxEvent como ENVIADO — sem retry aqui
+  (isso é papel do Scheduler, MVP 3). README atualizado com o passo a passo
+  de demo incluindo Kafka UI.
+- Estado atual: **validado de ponta a ponta** — `docker-compose down -v` +
+  `up -d --build` frio sobe tudo saudável; `POST /api/propostas` retorna
+  `201`; `outbox_events` mostra o registro `status: ENVIADO` poucos ms depois
+  da criação; a mensagem Avro chegou de fato no tópico `proposta-events`
+  (confirmado via `kafka-console-consumer.sh` dentro do container, campos
+  `propostaId/status/tipoAmortizacao/criadaEm` corretos). Kafka UI e Mongo
+  Express respondendo 200. Dados de teste limpos, stack parado
+  (`docker-compose down`, sem `-v`) ao final da sessão.
+- **Gotchas técnicos importantes para as próximas sessões (evitar perder
+  tempo redescobrindo)**:
+  1. **Spring Boot 4.1 usa Jackson 3 por padrão** — o `ObjectMapper`
+     autoconfigurado pelo Spring é `tools.jackson.databind.ObjectMapper`, NÃO
+     `com.fasterxml.jackson.databind.ObjectMapper` (Jackson 2, que ainda está
+     no classpath transitivamente só por compatibilidade de outras libs).
+     Injetar o tipo errado quebra o boot da aplicação com
+     `UnsatisfiedDependencyException` sem erro de compilação (Kotlin resolve
+     o import de qualquer um dos dois pacotes). Sempre usar
+     `tools.jackson.databind.ObjectMapper` ao injetar Jackson nesta stack.
+  2. **CRLF quebra os scripts dentro dos containers Linux** — com
+     `core.autocrlf=true` no Windows, um `git checkout`/`pull` reescreve
+     `gradlew` e os scripts em `docker/**/*.sh` para CRLF, e o shebang
+     `#!/bin/sh\r` falha com `not found` (mensagem enganosa — parece que o
+     arquivo não existe, mas é problema de line ending). Corrigido
+     definitivamente com [`.gitattributes`](./.gitattributes) forçando
+     `eol=lf` nesses arquivos — qualquer novo script de shell adicionado ao
+     projeto já cai na regra `*.sh`, não precisa lembrar de nada manualmente.
+     Se algum build falhar de novo com "`./gradlew: not found`" ou script do
+     compose morrendo sem log, suspeitar disso primeiro.
+  3. `generateAvroJava` às vezes não roda junto de `compileKotlin` isolado no
+     Gradle local (Windows) mesmo com o diretório gerado já existindo — rodar
+     explicitamemte `./gradlew generateAvroJava compileKotlin` resolve. Dentro
+     do Dockerfile isso não é um problema (o `bootJar` do build multi-stage já
+     força a ordem certa via grafo de tasks completo).
+- Próximo passo: **aguardar o usuário confirmar que o merge de
+  `feature/mvp2-outbox-pattern` → `develop` foi feito**. Só então: `checkout
+  develop` + `pull`, criar `feature/mvp3-scheduler-reprocessamento` (ou nome
+  equivalente) a partir dela, e iniciar o MVP 3 (Scheduler de
+  reprocessamento — claim atômico, backoff exponencial, FALHA_DEFINITIVA).
 
 ### 2026-08-08 — Processo de branch por MVP formalizado, aguardando merge do MVP 0+1
 - Feito: usuário formalizou o fluxo de branches por MVP (seção "Perfil de

@@ -49,7 +49,7 @@ docker-compose up -d
 | Kafka (bootstrap externo) | `localhost:9092` | Conectar um client Kafka externo à máquina, se necessário. |
 | LocalStack | http://localhost:4566 | Endpoint AWS local (Secrets Manager) — uso interno da aplicação, não precisa abrir na demo. |
 
-## Como demonstrar — criação de Proposta
+## Como demonstrar — criação de Proposta + Outbox Pattern
 
 1. Abra o [Swagger UI](http://localhost:8080/swagger-ui.html) e expanda
    `POST /api/propostas`.
@@ -59,11 +59,19 @@ docker-compose up -d
    ```
 3. Clique em "Execute" — a resposta `201 Created` traz a Proposta já com `id`
    e status `EM_ANDAMENTO`.
-4. Abra o [Mongo Express](http://localhost:8081), coleção `outbox_demo` →
-   `propostas`, e mostre o documento salvo.
+4. Abra o [Mongo Express](http://localhost:8081), banco `outbox_demo`:
+   - coleção `propostas` → mostra o documento da Proposta criada;
+   - coleção `outbox_events` → mostra o registro do Outbox Pattern, com
+     `status: "ENVIADO"` (a publicação no Kafka já aconteceu no fast-path
+     pós-commit, quase instantânea).
+5. Abra o [Kafka UI](http://localhost:8082), tópico `proposta-events`, e
+   mostre a mensagem chegando (serializada em Avro, chave de partição =
+   id da Proposta).
 
-> A publicação do evento no Kafka (Outbox Pattern) e a transição para
-> `PROCESSADA` chegam no MVP 2/4 — por enquanto a Proposta só é persistida.
+> A transição da Proposta para `PROCESSADA` (consumo da mensagem, idempotência,
+> Circuit Breaker/Retry/DLT) chega no MVP 4. O Scheduler de fallback — que
+> reprocessa o outbox se o fast-path falhar (ex.: Kafka fora do ar no momento
+> da criação) — chega no MVP 3.
 
 ## Conectando com um cliente MongoDB (opcional)
 

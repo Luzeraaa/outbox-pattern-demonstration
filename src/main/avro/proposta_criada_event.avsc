@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "PropostaCriadaEventAvro",
+  "namespace": "com.outboxpattern.demonstration.infrastructure.output.messaging.kafka.avro",
+  "doc": "Payload publicado no tópico proposta-events quando uma Proposta é criada — espelho serializável do domain event PropostaCriadaEvent (ver PropostaProducer para a conversão). Sem Schema Registry: o schema é versionado neste repositório, não no S3 (ver CLAUDE.md, secao 'Stack confirmada').",
+  "fields": [
+    { "name": "propostaId", "type": "string", "doc": "Id da Proposta — também usado como chave de partição no Kafka, garantindo ordenação por agregado." },
+    { "name": "status", "type": "string", "doc": "StatusPropostaEnum no momento da publicação (sempre EM_ANDAMENTO neste evento)." },
+    { "name": "tipoAmortizacao", "type": "string", "doc": "TipoAmortizacaoEnum (SAC ou PRICE)." },
+    { "name": "criadaEm", "type": "string", "doc": "Instant ISO-8601 de criação da Proposta." }
+  ]
+}
