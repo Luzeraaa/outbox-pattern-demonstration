@@ -8,6 +8,8 @@ import org.apache.avro.specific.SpecificDatumWriter
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Component
 import java.io.ByteArrayOutputStream
+import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 /**
  * Implementa `PropostaEventPublisherOutputPort` publicando no tópico
@@ -22,7 +24,13 @@ class PropostaProducer(
 ) : PropostaEventPublisherOutputPort {
 
 	override fun publicar(evento: PropostaCriadaEvent) {
-		kafkaTemplate.send(TOPICO, evento.propostaId, serializar(evento))
+		val futuro = kafkaTemplate.send(TOPICO, evento.propostaId, serializar(evento))
+		// Espera a confirmação (bloqueante, com timeout curto de propósito):
+		// tanto o fast-path quanto o Scheduler de fallback (MVP 3) dependem
+		// de saber SE a publicação teve sucesso para decidir marcar ENVIADO
+		// ou manter/reagendar o OutboxEvent - um "fire-and-forget" aqui
+		// esconderia falhas do Kafka do resto do Outbox Pattern.
+		futuro.get(TIMEOUT_PUBLICACAO.toMillis(), TimeUnit.MILLISECONDS)
 	}
 
 	/**
@@ -49,5 +57,10 @@ class PropostaProducer(
 
 	companion object {
 		const val TOPICO = "proposta-events"
+
+		// Curto de propósito: se o Kafka está fora do ar, queremos falhar
+		// rápido e deixar o OutboxEvent PENDENTE para o Scheduler, não travar
+		// a request (ou a rodada do Scheduler) esperando o client tentar.
+		private val TIMEOUT_PUBLICACAO = Duration.ofSeconds(5)
 	}
 }

@@ -28,6 +28,11 @@ class KafkaConfig(
 			ProducerConfig.BOOTSTRAP_SERVERS_CONFIG to bootstrapServers,
 			ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG to StringSerializer::class.java,
 			ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG to ByteArraySerializer::class.java,
+			// Default do client é 60s - inaceitável tanto pro fast-path (travaria
+			// a request HTTP) quanto pro Scheduler (travaria a rodada inteira)
+			// quando o Kafka está fora do ar. Falha rápido e deixa o OutboxEvent
+			// PENDENTE para o Scheduler de fallback (MVP 3) tentar de novo.
+			ProducerConfig.MAX_BLOCK_MS_CONFIG to "3000",
 		)
 		return DefaultKafkaProducerFactory(props)
 	}
