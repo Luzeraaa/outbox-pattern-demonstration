@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: outbox-pattern-demonstration
+
+  # ATENÇÃO: "spring.data.mongodb.*" foi depreciado (nível error) a partir do
+  # Spring Boot 4.0 em favor de "spring.mongodb.*" — usar o namespace antigo
+  # faz cair silenciosamente no default localhost:27017.
+  mongodb:
+    # Replica-set single-node — necessário para transação multi-documento
+    # (Proposta + OutboxEvent na mesma transação Mongo, ver CLAUDE.md).
+    # O host "mongo" resolve via DNS interno do docker-compose.
+    uri: mongodb://mongo:27017/outbox_demo?replicaSet=rs0
+
+  kafka:
+    bootstrap-servers: kafka:29092
+
+server:
+  port: 8080
+
+management:
+  endpoint:
+    health:
+      # "always" expõe o detalhe de cada health indicator (Mongo, disco, etc.)
+      # — útil na demo para mostrar que o healthcheck do compose é real, não
+      # um "fake ping".
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    # Ordena por método HTTP para facilitar achar o endpoint durante a demo
+    # ao vivo, quando a lista de endpoints crescer nos próximos MVPs.
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
