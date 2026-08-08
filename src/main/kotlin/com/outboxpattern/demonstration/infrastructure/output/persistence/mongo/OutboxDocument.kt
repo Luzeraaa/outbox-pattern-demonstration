@@ -21,4 +21,7 @@ data class OutboxDocument(
 	val tentativas: Int,
 	val createdAt: Instant,
 	val updatedAt: Instant,
+	val claimedBy: String? = null,
+	val claimExpiraEm: Instant? = null,
+	val proximaTentativaEm: Instant? = null,
 )
