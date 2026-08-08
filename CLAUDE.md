@@ -326,7 +326,7 @@ com `docker-compose up -d`", mesmo que o escopo ainda esteja incompleto.
   - Demo: parar Kafka → criar proposta → subir Kafka → ver scheduler publicar.
   - Rollback: scheduler é opt-in via configuração; não interfere no fluxo síncrono.
 
-- [ ] **MVP 4** — Listener idempotente + Circuit Breaker/Retry + DLT
+- [x] **MVP 4** — Listener idempotente + Circuit Breaker/Retry + DLT
   - Entrega: `PropostaListener`, checagem de status atual antes de transicionar
     (idempotência — ignora se já `PROCESSADA`), Resilience4j, DLT.
   - Pronto quando: fluxo feliz completo funciona sozinho; reenviar a mesma
@@ -371,6 +371,80 @@ antes de seguir para o próximo.**
 > - Decisões/gotchas técnicos relevantes para a próxima sessão
 > - Próximo passo: ...
 > ```
+
+### 2026-08-08 — MVP 4 concluído, aguardando merge para iniciar MVP 5
+- Feito: seguido o fluxo de branch por MVP — `checkout develop` + `pull`
+  (trouxe o merge do PR do MVP 3) e criada `feature/mvp4-listener-idempotente-dlt`
+  a partir dela. `PropostaNaoEncontradaException` (domain/exception, novo
+  pacote), `ProcessarPropostaInputPort` + `ProcessarPropostaUsecase`
+  (`@CircuitBreaker`/`@Retry` do Resilience4j, checa status atual antes de
+  transicionar — idempotência), `PropostaOutputPort.buscarPorId` (devolvido,
+  agora tem consumidor real), `PropostaListener` (`infrastructure/input/kafka`,
+  consumer group isolado `proposta-listener`, desserializa o mesmo Avro
+  binário do `PropostaProducer`), `KafkaConfig` ganhou consumer
+  factory + `ConcurrentKafkaListenerContainerFactory` com
+  `DefaultErrorHandler`/`DeadLetterPublishingRecoverer` apontando para
+  `proposta-events.DLT`, `ResilienceConfig` (loga toda tentativa de retry e
+  transição de estado do circuito — essencial pra demo mostrar o que está
+  acontecendo). README atualizado com demo de idempotência (reset de offset)
+  e de Circuit Breaker/Retry/DLT (Mongo derrubado).
+- Estado atual: **validado de ponta a ponta, incluindo os 3 cenários**:
+  1. Fluxo feliz completo — criar Proposta → outbox ENVIADO → Listener
+     consome → Proposta PROCESSADA, tudo em poucos segundos.
+  2. Idempotência — offset do consumer group resetado pra `earliest`,
+     mensagens já processadas foram redeliveredas e corretamente ignoradas
+     (log `"já está PROCESSADA — mensagem duplicada ignorada"`), sem erro,
+     sem duplicar efeito.
+  3. Circuit Breaker/Retry/DLT — Mongo derrubado, Listener tentou processar,
+     2 tentativas de retry logadas (`[Retry processar-proposta] tentativa
+     N falhou`), 3ª tentativa esgotada, mensagem original foi parar em
+     `proposta-events.DLT` (confirmado via `kafka-console-consumer`), Mongo
+     religado, fluxo voltou ao normal sozinho.
+  Stack sobe limpo com `docker-compose down -v` + `up -d --build`. Dados de
+  teste limpos, stack parado ao final da sessão.
+- **Quatro problemas reais encontrados e corrigidos durante a validação (nenhum
+  seria pego só por leitura de código — só apareceram rodando de verdade)**:
+  1. **`@KafkaListener` nunca era processado, silenciosamente** — faltava
+     `@EnableKafka` explícito no `KafkaConfig`. Sem erro, sem warning: o
+     consumer simplesmente nunca inicializava (confirmado só ao notar que
+     nenhuma thread/log de consumer aparecia e `kafka-consumer-groups.sh
+     --list` não mostrava o grupo). Causa provável: em versões recentes do
+     Spring Boot (4.1.0, usada aqui), a autoconfig do Kafka aparentemente não
+     habilita `@EnableKafka` implicitamente como em versões anteriores —
+     vale reconfirmar isso se o Boot for atualizado no futuro.
+  2. **`DeadLetterPublishingRecoverer` do Spring Kafka 4.1 usa por padrão o
+     sufixo `-dlt` (hífen, minúsculo), não `.DLT`** como em versões mais
+     antigas/documentação comum — publicava (e até auto-criava, via
+     `auto.create.topics.enable`) num tópico `proposta-events-dlt` diferente
+     do `proposta-events.DLT` já provisionado no `kafka-init` desde o MVP 0.
+     Corrigido com um destination resolver explícito
+     (`TopicPartition("${record.topic()}.DLT", record.partition())`) no
+     `KafkaConfig`. O tópico errado auto-criado foi deletado.
+  3. **`@CircuitBreaker`/`@Retry` do Resilience4j eram ignorados
+     SILENCIOSAMENTE** — faltava `aspectjweaver` no classpath (a integração
+     `resilience4j-spring6` usa classes `@Aspect`, que dependem dele pra
+     Spring AOP processar as anotações via proxy). Sem erro nenhum no boot:
+     o método `processar` só rodava direto, sem nenhuma tentativa extra.
+     Spring Boot 4 não tem mais um `spring-boot-starter-aop` dedicado
+     (módulos foram desmembrados) — corrigido adicionando
+     `org.aspectj:aspectjweaver` direto (versão resolvida automaticamente
+     via BOM do Spring, `1.9.25.1`).
+  4. **`serverSelectionTimeoutMS` do driver Mongo (default 30s) tornava a
+     demo de falha real dolorosamente lenta** — cada tentativa de
+     Circuit Breaker/Retry (e cada tick do Scheduler) esperava até 30s antes
+     de desistir. Reduzido para 5s via query param na URI
+     (`?...&serverSelectionTimeoutMS=5000`) — mesmo raciocínio do
+     `MAX_BLOCK_MS_CONFIG` do producer Kafka no MVP 3.
+  Lição para as próximas sessões: **anotações de framework (`@EnableX`,
+  `@CircuitBreaker`, `@Retry` etc.) que dependem de auto-configuração/AOP
+  podem falhar silenciosamente sem erro de boot** — sempre validar rodando de
+  verdade (log/thread/consumer group real), nunca só pela ausência de erro de
+  compilação ou de exception no startup.
+- Próximo passo: **aguardar o usuário confirmar que o merge de
+  `feature/mvp4-listener-idempotente-dlt` → `develop` foi feito**. Só então:
+  `checkout develop` + `pull`, criar `feature/mvp5-localstack-secrets-manager`
+  (ou nome equivalente) a partir dela, e iniciar o MVP 5 (Recursos AWS via
+  LocalStack — Secrets Manager).
 
 ### 2026-08-08 — MVP 3 concluído, aguardando merge para iniciar MVP 4
 - Feito: seguido o fluxo de branch por MVP — `checkout develop` + `pull`
