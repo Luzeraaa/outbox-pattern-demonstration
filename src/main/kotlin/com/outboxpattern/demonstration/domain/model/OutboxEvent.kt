@@ -21,6 +21,16 @@ data class OutboxEvent(
 	val tentativas: Int = 0,
 	val createdAt: Instant = Instant.now(),
 	val updatedAt: Instant = Instant.now(),
+	/** Identifica qual instância da app reivindicou este registro para
+	 * reprocessar — parte do claim atômico do Scheduler (MVP 3). */
+	val claimedBy: String? = null,
+	/** Até quando o claim acima é válido; um claim vencido é tratado como
+	 * "instância provavelmente crashou" e libera o registro para outra
+	 * reivindicar, evitando que um evento fique preso para sempre. */
+	val claimExpiraEm: Instant? = null,
+	/** Backoff exponencial: enquanto no futuro, o Scheduler ignora este
+	 * registro mesmo estando PENDENTE — evita martelar um Kafka fora do ar. */
+	val proximaTentativaEm: Instant? = null,
 ) {
 	companion object {
 		/** Todo OutboxEvent nasce PENDENTE — só o fast-path/Scheduler o transicionam. */
