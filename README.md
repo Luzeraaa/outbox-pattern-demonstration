@@ -69,9 +69,30 @@ docker-compose up -d
    id da Proposta).
 
 > A transição da Proposta para `PROCESSADA` (consumo da mensagem, idempotência,
-> Circuit Breaker/Retry/DLT) chega no MVP 4. O Scheduler de fallback — que
-> reprocessa o outbox se o fast-path falhar (ex.: Kafka fora do ar no momento
-> da criação) — chega no MVP 3.
+> Circuit Breaker/Retry/DLT) chega no MVP 4.
+
+## Como demonstrar — resiliência do Scheduler (Kafka fora do ar)
+
+O `OutboxReprocessamentoScheduler` é a rede de segurança: se a publicação
+imediata (fast-path) falhar, o registro fica `outbox_events.status: PENDENTE`
+e o Scheduler tenta de novo periodicamente, com backoff exponencial.
+
+1. Pare o Kafka: `docker stop outbox-pattern-demonstration-kafka-1` (ou pelo
+   Docker Desktop).
+2. Crie uma Proposta pelo Swagger normalmente — a resposta ainda vem `201`
+   (a criação em si não depende do Kafka), mas no Mongo Express o
+   `outbox_events` correspondente fica `PENDENTE` (ou `EM_PROCESSAMENTO`
+   momentaneamente, enquanto o Scheduler tenta).
+3. Suba o Kafka de novo: `docker start outbox-pattern-demonstration-kafka-1`.
+4. Em poucos segundos (respeitando o backoff da última tentativa), o
+   Scheduler republica sozinho — o `outbox_events` vira `ENVIADO` e a
+   mensagem aparece no Kafka UI, sem nenhum comando manual de reenvio.
+
+> Se o Kafka ficar indisponível por tempo suficiente para esgotar
+> `outbox.scheduler.max-tentativas` (default 5, com backoff de 5s a 5min), o
+> registro vai para `FALHA_DEFINITIVA` — estado terminal, não é mais
+> reprocessado automaticamente (evita loop infinito numa "poison message").
+> Fica visível no Mongo Express para investigação manual.
 
 ## Conectando com um cliente MongoDB (opcional)
 
