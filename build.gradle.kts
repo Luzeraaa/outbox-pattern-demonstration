@@ -40,6 +40,15 @@ dependencies {
 	// dependência já fixada agora para não recalcular compatibilidade depois.
 	implementation("io.github.resilience4j:resilience4j-spring-boot4:2.4.0")
 
+	// resilience4j-spring6 usa classes @Aspect (CircuitBreakerAspect/RetryAspect)
+	// para interceptar @CircuitBreaker/@Retry via Spring AOP proxy-based - sem
+	// aspectjweaver no classpath essas anotações são ignoradas SILENCIOSAMENTE
+	// (sem erro/warning no boot, método roda desprotegido). Spring Boot 4 não
+	// tem mais um "spring-boot-starter-aop" dedicado (módulos foram
+	// desmembrados) - spring-aop já vem transitivo via spring-context, só
+	// falta o aspectjweaver em si.
+	implementation("org.aspectj:aspectjweaver")
+
 	// Serialização Avro do payload publicado no tópico Kafka (schema em src/main/avro)
 	implementation("org.apache.avro:avro:1.12.0")
 
