@@ -43,11 +43,22 @@ promessa de "rodar fácil e intuitivo". Decisões corrigidas:
 - NUNCA fazer merge (develop → staging → main) sem aprovação explícita do usuário.
 - Entrega dividida em MVPs **resilientes** (ver seção de roadmap): cada MVP deixa o
   sistema num estado que sobe sozinho com `docker-compose up -d`, mesmo incompleto.
-  Só avançar para o próximo MVP após "ok" explícito do usuário.
 - Não escrever testes unitários (decisão explícita do usuário para este POC).
 - Commits semânticos (feat:, fix:, docs:, chore:, refactor:) em português, granulares.
-- Fluxo de branches: `main` (protegida) ← `staging` ← `develop` ← branches de feature
-  por MVP. Configurar GitHub Actions com gate manual antes de main.
+- **Fluxo de branches/MVP (processo obrigatório, uma branch por MVP)**:
+  `main` (protegida) ← `staging` ← `develop` ← branch de feature por MVP.
+  Configurar GitHub Actions com gate manual antes de main. Para cada MVP:
+  1. No início do MVP, `git pull` a branch `develop` local (garante partir do
+     que já foi mergeado, incluindo MVPs anteriores).
+  2. Criar uma nova branch a partir de `develop` para aquele MVP (ex.:
+     `feature/mvp2-outbox-pattern`).
+  3. Commitar todo o trabalho do MVP nessa branch (commits granulares, ver
+     acima).
+  4. Ao final do MVP, parar e aguardar o usuário revisar/abrir PR/fazer o
+     merge para `develop` — **nunca abrir a branch do MVP seguinte antes
+     disso**. Só seguir para o próximo MVP depois que o usuário informar
+     explicitamente que o merge foi feito (não basta "ok, pode seguir"; é o
+     merge em si que libera o próximo `pull` + nova branch do passo 1).
 - **README.md do repositório deve ser atualizado ao final de CADA MVP** — é o que a
   liderança e qualquer pessoa nova vai ler para rodar o projeto. Nunca considerar um
   MVP "pronto" com o README desatualizado.
@@ -345,8 +356,10 @@ com `docker-compose up -d`", mesmo que o escopo ainda esteja incompleto.
   - Pronto quando: pipeline verde e PR para main aguardando aprovação humana.
   - Rollback: `workflow_dispatch`/aprovação manual evita merge acidental.
 
-**Ao iniciar uma sessão, comece pelo primeiro item não marcado e pare ao final do
-MVP aguardando aprovação explícita antes de seguir para o próximo.**
+**Ao iniciar uma sessão, comece pelo primeiro item não marcado seguindo o fluxo de
+branches acima (`pull` de `develop` → nova branch do MVP) e pare ao final do MVP
+aguardando o usuário informar que o merge daquela branch para `develop` foi feito
+antes de seguir para o próximo.**
 
 ## Atualizações
 
@@ -358,6 +371,23 @@ MVP aguardando aprovação explícita antes de seguir para o próximo.**
 > - Decisões/gotchas técnicos relevantes para a próxima sessão
 > - Próximo passo: ...
 > ```
+
+### 2026-08-08 — Processo de branch por MVP formalizado, aguardando merge do MVP 0+1
+- Feito: usuário formalizou o fluxo de branches por MVP (seção "Perfil de
+  trabalho" e fechamento do roadmap atualizados): a cada MVP, `pull` de
+  `develop` → nova branch a partir dela para aquele MVP → commits granulares
+  nessa branch → parar e só avançar para o MVP seguinte depois que o usuário
+  confirmar que o merge daquela branch para `develop` foi feito (não basta
+  aprovação verbal de "pode seguir" — é o merge em si que libera o próximo
+  `pull`).
+- Estado atual: branch `feature/mvp0-orquestracao-completa` (que acumulou
+  MVP 0 + MVP 1, antes desta regra existir) ainda **não foi mergeada** em
+  `develop` — PR aberto, aguardando o usuário mergear. Nenhum código novo foi
+  escrito nesta entrada, só documentação de processo.
+- Próximo passo: **aguardar o usuário confirmar que o merge de
+  `feature/mvp0-orquestracao-completa` → `develop` foi feito**. Só então:
+  `git checkout develop && git pull`, criar `feature/mvp2-...` a partir dela,
+  e iniciar o MVP 2 (Outbox Pattern + fast-path pós-commit + Avro).
 
 ### 2026-08-08 — MVP 1 concluído, aguardando aprovação para MVP 2
 - Feito: branch `feature/mvp0-orquestracao-completa` pushada para o remoto
