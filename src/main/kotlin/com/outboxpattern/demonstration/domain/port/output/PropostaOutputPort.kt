@@ -9,4 +9,8 @@ import com.outboxpattern.demonstration.domain.model.Proposta
  */
 interface PropostaOutputPort {
 	fun salvar(proposta: Proposta): Proposta
+
+	/** Usado pelo `ProcessarPropostaUsecase` (MVP 4) para checar o status
+	 * atual antes de transicionar — é a base da idempotência do Listener. */
+	fun buscarPorId(id: String): Proposta?
 }
