@@ -29,6 +29,25 @@ management:
       exposure:
         include: health,info
 
+outbox:
+  scheduler:
+    # Rollback (ver CLAUDE.md, roadmap MVP 3): false desliga só a rede de
+    # segurança, o fluxo síncrono de criação continua funcionando normalmente.
+    enabled: true
+    fixed-delay-ms: 5000
+    # Quanto tempo um claim (EM_PROCESSAMENTO) fica válido antes de ser
+    # considerado abandonado (instância que reivindicou provavelmente crashou).
+    claim-ttl-segundos: 30
+    # Um PENDENTE de 1ª tentativa só fica elegível pro Scheduler depois de
+    # "envelhecer" esse tanto - dá tempo do fast-path pós-commit terminar
+    # antes do Scheduler competir pelo mesmo registro e publicar duplicado.
+    grace-period-segundos: 6
+    # Limite antes de ir para FALHA_DEFINITIVA - evita retry infinito de
+    # "poison message".
+    max-tentativas: 5
+    backoff-base-segundos: 5
+    backoff-max-segundos: 300
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
