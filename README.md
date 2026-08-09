@@ -8,6 +8,13 @@ sem perder mensagem e sem publicar antes da transação de negócio ser confirma
 > em [`CLAUDE.md`](./CLAUDE.md) (documentação de execução/desenvolvimento).
 > Este README é o guia para **rodar e demonstrar** o projeto.
 
+## Documentação
+
+| Documento | Público-alvo | Conteúdo |
+|---|---|---|
+| [PDF de apresentação para liderança](./docs/apresentacao-lideranca.pdf) | Liderança não-técnica/semi-técnica | Visão geral não-técnica, fluxograma do fluxo de eventos, decisões de arquitetura em linguagem acessível, provas visuais (screenshots) |
+| [PDF técnico](./docs/documentacao-tecnica.pdf) | Desenvolvedores/manutenção | Arquitetura, domínio, camadas de aplicação/infraestrutura, trade-offs, lições aprendidas |
+
 ## Como rodar
 
 Único pré-requisito: **Docker Desktop** instalado e rodando.
@@ -66,8 +73,7 @@ docker-compose up -d
 5. Abra o [Kafka UI](http://localhost:8082), tópico `proposta-events`, e
    mostre a mensagem chegando (serializada em Avro, chave de partição =
    id da Proposta).
-
-5. Poucos instantes depois, o `PropostaListener` consome a mensagem e a
+6. Poucos instantes depois, o `PropostaListener` consome a mensagem e a
    Proposta muda para `PROCESSADA` — recarregue o documento no Mongo Express
    para ver a transição.
 
@@ -128,7 +134,6 @@ O `PropostaListener` só transiciona a Proposta se ela ainda não estiver
 > logs aparece `[CircuitBreaker processar-proposta] CLOSED -> OPEN`, sinal de
 > que a app parou de tentar falar com a dependência instável por um tempo,
 > em vez de continuar martelando.
-> Fica visível no Mongo Express para investigação manual.
 
 ## Conectando com um cliente MongoDB (opcional)
 
