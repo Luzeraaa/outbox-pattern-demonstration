@@ -376,7 +376,7 @@ com `docker-compose up -d`", mesmo que o escopo ainda esteja incompleto.
     do README e da tabela de pré-requisitos — nada sobra rodando sem
     propósito na demo (ver "Revisão: remoção do LocalStack/AWS" abaixo).
 
-- [ ] **MVP 6** — Documentação (2 PDFs) + README final
+- [x] **MVP 6** — Documentação (2 PDFs) + README final
   - Entrega: **PDF técnico** (documentação por classe/método/usecase/domínio,
     linguagem ubíqua) e **PDF de apresentação para liderança** (visão geral
     não-técnica, fluxograma do fluxo de eventos, trade-offs de arquitetura
@@ -406,6 +406,57 @@ antes de seguir para o próximo.**
 > - Decisões/gotchas técnicos relevantes para a próxima sessão
 > - Próximo passo: ...
 > ```
+
+### 2026-08-08 — MVP 6 concluído, aguardando merge para iniciar MVP 7
+- Feito: seguido o fluxo de branch por MVP — `checkout develop` + `pull`
+  (trouxe o merge do PR de remoção do LocalStack) e criada
+  `feature/mvp6-documentacao-pdfs` a partir dela. Gerados os 2 PDFs definidos
+  no roadmap: [`docs/documentacao-tecnica.pdf`](./docs/documentacao-tecnica.pdf)
+  (arquitetura, domínio, usecases, infraestrutura, fluxo, trade-offs,
+  referência de classes, lições aprendidas) e
+  [`docs/apresentacao-lideranca.pdf`](./docs/apresentacao-lideranca.pdf)
+  (problema → solução → fluxograma → camadas de resiliência → decisões em
+  linguagem simples → provas visuais → status dos MVPs → fechamento), com
+  fontes HTML versionadas em `docs/*.html` para permitir regenerar/editar
+  depois. README atualizado com seção "Documentação" linkando os 2 PDFs, e
+  corrigidos dois defeitos pré-existentes no README (numeração duplicada
+  "5." repetida na seção de demo do MVP2, e uma linha órfã sobre "Mongo
+  Express" solta no fim do callout de Circuit Breaker do MVP4).
+- **Como os PDFs foram gerados** (nenhuma ferramenta de PDF estava disponível
+  no ambiente — sem Python/pip, sem pandoc, sem LibreOffice, sem Node):
+  o Microsoft Edge já vem instalado no Windows (`C:\Program Files
+  (x86)\Microsoft\Edge\Application\msedge.exe`) e sua impressão headless
+  (`--headless --print-to-pdf=arquivo.pdf`) converte HTML+CSS+SVG inline
+  para PDF sem nenhuma dependência extra. Screenshots reais da aplicação
+  rodando (Swagger, Mongo Express, Kafka UI) foram capturados do mesmo jeito
+  (`--screenshot=arquivo.png`) e embutidos no PDF de apresentação para dar
+  prova visual concreta, não só descrição.
+- **Gotchas da geração de PDF (documentados para não redescobrir depois)**:
+  1. Páginas com JS assíncrono (Swagger UI, Mongo Express, Kafka UI) ficam em
+     branco no screenshot/PDF sem `--virtual-time-budget=N` (ms) — o
+     `--screenshot`/`--print-to-pdf` sozinho captura no evento de `load`, antes
+     da SPA terminar de renderizar. 8000-15000ms resolveu para todas as telas
+     testadas; Kafka UI especificamente também exigiu navegar para a URL
+     correta com deep-link (`/ui/clusters/local/all-topics/...`), já que
+     `/ui/clusters/local/topics` não existe como rota direta.
+  2. A flag para suprimir cabeçalho/rodapé do Chrome no PDF impresso é
+     **`--no-pdf-header-footer`**, não `--print-to-pdf-no-header` (que parece
+     nome mais óbvio/documentado por aí, mas não teve efeito nenhum nesta
+     versão do Edge — o PDF saía com data/hora, título e número de página
+     impressos em cada página até a troca de flag).
+  3. Processos `msedge.exe` headless anteriores ficavam pendurados e às vezes
+     causavam "opening in existing browser session" nas chamadas seguintes —
+     `Stop-Process -Force` antes de cada nova geração evitou resultados
+     inconsistentes.
+- Estado atual: 2 PDFs gerados e verificados visualmente (17 páginas o
+  técnico, 11 slides o de liderança), README com link para ambos. Nenhuma
+  mudança de código de aplicação nesta entrada. Stack subida só para capturar
+  os screenshots (2 Propostas de teste criadas e depois limpas do Mongo).
+- Próximo passo: **aguardar o usuário confirmar que o merge de
+  `feature/mvp6-documentacao-pdfs` → `develop` foi feito**. Só então:
+  `checkout develop` + `pull`, criar `feature/mvp7-github-actions` (ou nome
+  equivalente) a partir dela, e iniciar o MVP 7 (GitHub Actions + revisão
+  final dos commits).
 
 ### 2026-08-08 — MVP 5 pulado por decisão do usuário, MVP 6 redefinido
 - Feito: usuário pediu para pular o MVP 5 (recursos AWS/LocalStack

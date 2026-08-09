@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Outbox Pattern — Apresentação para Liderança</title>
+<style>
+  @page { size: A4 landscape; margin: 14mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #1c2530;
+    margin: 0;
+    font-size: 13pt;
+  }
+  .slide {
+    width: 100%;
+    min-height: 178mm;
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6mm 4mm;
+  }
+  .slide:last-child { page-break-after: auto; }
+  .kicker { color: #1f7a6c; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; font-size: 11pt; margin-bottom: 5mm; }
+  h1 { font-size: 30pt; color: #0f2a43; margin: 0 0 6mm 0; line-height: 1.2; }
+  h2 { font-size: 22pt; color: #0f2a43; margin: 0 0 8mm 0; }
+  .lead { font-size: 15pt; color: #45566b; max-width: 190mm; line-height: 1.5; margin-bottom: 6mm; }
+  .cols { display: flex; gap: 8mm; align-items: stretch; }
+  .col { flex: 1; }
+  .card {
+    background: #f6f9fa; border: 1px solid #dde5ea; border-radius: 4mm;
+    padding: 6mm 7mm; margin-bottom: 5mm;
+  }
+  .card h3 { margin: 0 0 2mm 0; font-size: 14pt; color: #14425f; }
+  .card p { margin: 0; font-size: 11.5pt; color: #45566b; line-height: 1.45; }
+  .card.bad { border-color: #e0b0ac; background: #fbf0ee; }
+  .card.good { border-color: #a9d3c8; background: #eef6f4; }
+  .footer {
+    position: absolute; bottom: 10mm; right: 16mm; font-size: 9pt; color: #9aa5b1;
+  }
+  .cover { align-items: flex-start; }
+  .cover .brand { color: #1f7a6c; font-weight: 700; font-size: 12pt; margin-bottom: 10mm; letter-spacing: 1px; }
+  .cover h1 { font-size: 40pt; }
+  .cover .sub2 { font-size: 16pt; color: #45566b; margin-top: 4mm; }
+  .cover .meta { margin-top: 20mm; font-size: 10.5pt; color: #6b7686; }
+  table.mvp { width: 100%; border-collapse: collapse; font-size: 11.5pt; }
+  table.mvp th, table.mvp td { border: 1px solid #dde5ea; padding: 3mm 4mm; text-align: left; }
+  table.mvp th { background: #0f2a43; color: #fff; }
+  table.mvp tr:nth-child(even) td { background: #f6f9fa; }
+  .done { color: #1f7a6c; font-weight: 700; }
+  .skip { color: #a0752a; font-weight: 700; }
+  .pending { color: #8a95a3; font-weight: 700; }
+  .shot {
+    border: 1px solid #cdd6de; border-radius: 3mm; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .shot img { display: block; width: 100%; }
+  .shot-caption { font-size: 10pt; color: #45566b; margin-top: 2mm; text-align: center; }
+  .badge-flow {
+    display: inline-block; padding: 2mm 4mm; border-radius: 3mm; color: #fff; font-weight: 700; font-size: 11pt;
+  }
+</style>
+</head>
+<body>
+
+<!-- SLIDE 1: CAPA -->
+<section class="slide cover">
+  <div class="brand">OUTBOX PATTERN — DEMONSTRAÇÃO</div>
+  <h1>Garantindo que nenhuma<br>mensagem se perca</h1>
+  <div class="sub2">Como o sistema evita perder ou duplicar um evento de negócio,<br>mesmo quando algo falha no meio do caminho.</div>
+  <div class="meta">Apresentação para liderança · agosto de 2026</div>
+</section>
+
+<!-- SLIDE 2: O PROBLEMA -->
+<section class="slide">
+  <div class="kicker">O problema</div>
+  <h2>Duas ações, um único momento — e se uma falhar?</h2>
+  <p class="lead">
+    Toda vez que um sistema salva algo importante no banco de dados <strong>e</strong> precisa
+    avisar outros sistemas sobre isso (um "evento"), existe um risco: as duas ações podem
+    não acontecer juntas.
+  </p>
+  <div class="cols">
+    <div class="col card bad">
+      <h3>❌ Cenário 1</h3>
+      <p>O dado é salvo no banco, mas o aviso nunca chega a ser enviado (o sistema caiu,
+      a rede falhou). Outros sistemas nunca ficam sabendo — <strong>informação perdida</strong>.</p>
+    </div>
+    <div class="col card bad">
+      <h3>❌ Cenário 2</h3>
+      <p>O aviso é enviado, mas o dado não chega a ser salvo (a transação falhou depois).
+      Outros sistemas reagem a algo que <strong>nunca aconteceu de verdade</strong>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE 3: A SOLUÇÃO -->
+<section class="slide">
+  <div class="kicker">A solução</div>
+  <h2>Outbox Pattern: o aviso nasce junto com o dado</h2>
+  <p class="lead">
+    Em vez de salvar o dado e enviar o aviso como duas ações separadas, o sistema salva
+    <strong>os dois juntos, na mesma operação</strong> — ou os dois acontecem, ou nenhum acontece.
+    O envio de fato para os outros sistemas é feito logo depois, com garantia de que vai
+    acontecer eventualmente, mesmo se algo falhar no meio do caminho.
+  </p>
+  <div class="cols">
+    <div class="col card good">
+      <h3>✔ Sem perda</h3>
+      <p>O "aviso pendente" fica registrado no banco antes de qualquer tentativa de envio —
+      se o envio falhar, ele continua lá, esperando ser tentado de novo.</p>
+    </div>
+    <div class="col card good">
+      <h3>✔ Sem inconsistência</h3>
+      <p>O aviso só é criado se o dado de negócio também foi salvo — nunca ao contrário.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE 4: FLUXOGRAMA -->
+<section class="slide">
+  <div class="kicker">Como funciona, passo a passo</div>
+  <h2>Fluxograma do fluxo de eventos</h2>
+  <svg viewBox="0 0 1000 420" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+    <rect x="10" y="40" width="170" height="60" rx="8" fill="#0f2a43"/>
+    <text x="95" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">1. Criação</text>
+    <text x="95" y="83" text-anchor="middle" fill="#cfe0ee" font-size="10.5">Proposta + aviso salvos juntos</text>
+
+    <rect x="230" y="40" width="170" height="60" rx="8" fill="#1f7a6c"/>
+    <text x="315" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">2. Envio imediato</text>
+    <text x="315" y="83" text-anchor="middle" fill="#dff2ee" font-size="10.5">Assim que a criação é confirmada</text>
+
+    <rect x="450" y="40" width="170" height="60" rx="8" fill="#14425f"/>
+    <text x="535" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">3. Kafka</text>
+    <text x="535" y="83" text-anchor="middle" fill="#cfe0ee" font-size="10.5">Canal de mensagens</text>
+
+    <rect x="670" y="40" width="200" height="60" rx="8" fill="#a05a1f"/>
+    <text x="770" y="65" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">4. Consumo</text>
+    <text x="770" y="83" text-anchor="middle" fill="#f6e6d6" font-size="10.5">Com proteção contra falha</text>
+
+    <rect x="230" y="180" width="170" height="60" rx="8" fill="#6b4fa0"/>
+    <text x="315" y="205" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Rede de segurança</text>
+    <text x="315" y="223" text-anchor="middle" fill="#e9e1f4" font-size="10.5">Tenta de novo automaticamente</text>
+
+    <rect x="450" y="180" width="170" height="60" rx="8" fill="#1f7a6c"/>
+    <text x="535" y="205" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">5. Concluído</text>
+    <text x="535" y="223" text-anchor="middle" fill="#dff2ee" font-size="10.5">Repetição é ignorada com segurança</text>
+
+    <rect x="670" y="180" width="200" height="60" rx="8" fill="#a02f2f"/>
+    <text x="770" y="205" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">Investigação manual</text>
+    <text x="770" y="223" text-anchor="middle" fill="#f5d9d9" font-size="10.5">Só em falha persistente</text>
+
+    <line x1="180" y1="70" x2="228" y2="70" stroke="#45566b" stroke-width="2" marker-end="url(#af)"/>
+    <line x1="400" y1="70" x2="448" y2="70" stroke="#45566b" stroke-width="2" marker-end="url(#af)"/>
+    <line x1="620" y1="70" x2="668" y2="70" stroke="#45566b" stroke-width="2" marker-end="url(#af)"/>
+    <line x1="315" y1="100" x2="315" y2="178" stroke="#45566b" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#af)"/>
+    <text x="330" y="145" fill="#6b7686" font-size="10">se o passo 2 falhar</text>
+    <line x1="400" y1="210" x2="448" y2="210" stroke="#45566b" stroke-width="2" marker-end="url(#af)"/>
+    <line x1="770" y1="100" x2="770" y2="178" stroke="#45566b" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#af)"/>
+    <text x="785" y="145" fill="#6b7686" font-size="10">se falhar muitas vezes</text>
+    <line x1="620" y1="210" x2="668" y2="140" stroke="#45566b" stroke-width="2" marker-end="url(#af)"/>
+
+    <text x="10" y="330" font-size="12" fill="#45566b">Em condições normais, todo o fluxo acontece em segundos — os passos "Rede de segurança" e</text>
+    <text x="10" y="350" font-size="12" fill="#45566b">"Investigação manual" só entram em ação se algo já falhou (ex.: instabilidade momentânea).</text>
+    <defs><marker id="af" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#45566b"/></marker></defs>
+  </svg>
+</section>
+
+<!-- SLIDE 5: CAMADAS DE PROTEÇÃO -->
+<section class="slide">
+  <div class="kicker">Resiliência</div>
+  <h2>Quatro camadas de proteção, uma para cada tipo de falha</h2>
+  <div class="cols">
+    <div class="col card">
+      <h3>1. Envio imediato</h3>
+      <p>Caminho normal — leva segundos, cobre a grande maioria dos casos.</p>
+    </div>
+    <div class="col card">
+      <h3>2. Verificador automático</h3>
+      <p>Se o envio imediato falhar (ex.: instabilidade momentânea), um processo em segundo
+      plano tenta de novo sozinho, aumentando o tempo de espera a cada tentativa.</p>
+    </div>
+  </div>
+  <div class="cols">
+    <div class="col card">
+      <h3>3. Disjuntor de segurança</h3>
+      <p>Se uma dependência externa está com problema persistente, o sistema para de tentar
+      por um tempo em vez de insistir — evita piorar uma instabilidade já existente.</p>
+    </div>
+    <div class="col card">
+      <h3>4. Fila de investigação</h3>
+      <p>Casos que falharam depois de todas as tentativas ficam separados, visíveis para
+      investigação manual — nada se perde silenciosamente.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE 6: DECISÕES -->
+<section class="slide">
+  <div class="kicker">Decisões de arquitetura</div>
+  <h2>Escolhas conscientes, não falta de conhecimento</h2>
+  <div class="card">
+    <h3>Verificação periódica em vez de leitura contínua do banco</h3>
+    <p>Existe uma técnica mais sofisticada (leitura em tempo real do log do banco) que reduz
+    o tempo de espera de segundos para milissegundos, mas exige mais peças de infraestrutura
+    para operar. Para o objetivo desta demonstração, a verificação periódica é suficiente e
+    mais simples de manter — a técnica mais sofisticada é a recomendação para produção em
+    alta escala.</p>
+  </div>
+  <div class="card">
+    <h3>"Pelo menos uma vez", nunca "exatamente uma vez"</h3>
+    <p>O sistema garante que a mensagem <strong>sempre</strong> chega — o preço disso é que,
+    raramente, ela pode chegar duas vezes. Por isso o lado que recebe já foi construído para
+    reconhecer e ignorar repetições com segurança, sem duplicar nenhum efeito.</p>
+  </div>
+</section>
+
+<!-- SLIDE 7: PROVA VISUAL 1 -->
+<section class="slide">
+  <div class="kicker">Provas visuais — funcionando de verdade</div>
+  <h2>Criar uma proposta, sem Postman nem terminal</h2>
+  <div class="cols">
+    <div class="col">
+      <div class="shot"><img src="assets/swagger.png"></div>
+      <div class="shot-caption">Swagger — qualquer pessoa cria uma proposta clicando em "Try it out"</div>
+    </div>
+    <div class="col">
+      <div class="shot"><img src="assets/mongo-express.png"></div>
+      <div class="shot-caption">Mongo Express — a proposta salva, já <span class="badge-flow" style="background:#1f7a6c">PROCESSADA</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE 8: PROVA VISUAL 2 -->
+<section class="slide">
+  <div class="kicker">Provas visuais — o evento de verdade acontecendo</div>
+  <h2>O aviso registrado e a mensagem entregue</h2>
+  <div class="cols">
+    <div class="col">
+      <div class="shot"><img src="assets/mongo-express-outbox.png"></div>
+      <div class="shot-caption">Registro do "aviso pendente" — status <span class="badge-flow" style="background:#1f7a6c">ENVIADO</span></div>
+    </div>
+    <div class="col">
+      <div class="shot"><img src="assets/kafka-ui-messages.png"></div>
+      <div class="shot-caption">Kafka UI — as mensagens chegando no canal de eventos</div>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE 9: PROVA VISUAL 3 -->
+<section class="slide">
+  <div class="kicker">Provas visuais — a rede de segurança existe de verdade</div>
+  <h2>A fila de investigação está lá, pronta, mesmo vazia</h2>
+  <div class="cols" style="justify-content: center;">
+    <div class="col" style="max-width: 140mm;">
+      <div class="shot"><img src="assets/kafka-ui-topics-list.png"></div>
+      <div class="shot-caption">Canal de eventos e canal de investigação (DLT) provisionados desde o primeiro dia — 0 mensagens na DLT porque nada falhou até aqui</div>
+    </div>
+  </div>
+</section>
+
+<!-- SLIDE 10: O QUE FOI ENTREGUE -->
+<section class="slide">
+  <div class="kicker">Entrega</div>
+  <h2>O que já está pronto</h2>
+  <table class="mvp">
+    <tr><th>Etapa</th><th>Entrega</th><th>Status</th></tr>
+    <tr><td>MVP 0</td><td>Orquestração completa — sobe tudo com um comando</td><td class="done">✔ Concluído</td></tr>
+    <tr><td>MVP 1</td><td>Criação de Proposta pelo Swagger</td><td class="done">✔ Concluído</td></tr>
+    <tr><td>MVP 2</td><td>Outbox Pattern — publicação confiável no Kafka</td><td class="done">✔ Concluído</td></tr>
+    <tr><td>MVP 3</td><td>Rede de segurança automática (reprocessamento)</td><td class="done">✔ Concluído</td></tr>
+    <tr><td>MVP 4</td><td>Consumo protegido, sem duplicar efeito, com fila de investigação</td><td class="done">✔ Concluído</td></tr>
+    <tr><td>MVP 5</td><td>Recursos AWS (Secrets Manager)</td><td class="skip">Descartado — desnecessário para a demo</td></tr>
+    <tr><td>MVP 6</td><td>Esta documentação</td><td class="done">✔ Concluído</td></tr>
+    <tr><td>MVP 7</td><td>Pipeline automatizado com aprovação manual antes de produção</td><td class="pending">Próximo passo</td></tr>
+  </table>
+</section>
+
+<!-- SLIDE 11: FECHAMENTO -->
+<section class="slide">
+  <div class="kicker">Fechamento</div>
+  <h2>Sobe com um comando, funciona de ponta a ponta</h2>
+  <p class="lead">
+    <code>docker-compose up -d</code> — nenhum passo manual, nenhuma configuração extra.
+    O sistema já demonstrou, rodando de verdade: criação de dado + evento na mesma operação,
+    entrega automática, recuperação automática de falha temporária, e uma fila de
+    investigação para o que precisar de atenção humana.
+  </p>
+  <div class="card good">
+    <h3>Próximo passo sugerido</h3>
+    <p>Pipeline automatizado (MVP 7) com aprovação manual obrigatória antes de qualquer
+    mudança chegar à branch principal.</p>
+  </div>
+</section>
+
+</body>
+</html>

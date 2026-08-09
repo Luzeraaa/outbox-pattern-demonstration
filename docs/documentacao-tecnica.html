@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Outbox Pattern — Documentação Técnica</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #1c2530;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    margin: 0;
+  }
+  code, pre, .mono { font-family: "Consolas", "Courier New", monospace; }
+  h1 { font-size: 22pt; color: #0f2a43; margin: 0 0 4mm 0; }
+  h2 {
+    font-size: 15pt; color: #0f2a43; margin: 10mm 0 4mm 0;
+    padding-bottom: 2mm; border-bottom: 2px solid #1f7a6c;
+  }
+  h3 { font-size: 12pt; color: #14425f; margin: 6mm 0 2mm 0; }
+  h4 { font-size: 10.5pt; color: #1f7a6c; margin: 4mm 0 1mm 0; }
+  p { margin: 0 0 3mm 0; text-align: justify; }
+  .page-break { page-break-before: always; }
+  .cover {
+    height: 250mm; display: flex; flex-direction: column;
+    justify-content: center; align-items: flex-start;
+    border-left: 6px solid #1f7a6c; padding-left: 10mm;
+  }
+  .cover .kicker { color: #1f7a6c; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; font-size: 10pt; margin-bottom: 4mm; }
+  .cover h1 { font-size: 30pt; line-height: 1.15; }
+  .cover .sub { font-size: 13pt; color: #45566b; margin-top: 4mm; max-width: 140mm; }
+  .cover .meta { margin-top: 16mm; font-size: 9.5pt; color: #6b7686; }
+  .cover .meta div { margin-bottom: 1mm; }
+  table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm 0; font-size: 9.3pt; }
+  th, td { border: 1px solid #d3dae2; padding: 2mm 2.5mm; text-align: left; vertical-align: top; }
+  th { background: #eef3f6; color: #0f2a43; font-weight: 600; }
+  tr:nth-child(even) td { background: #f8fafb; }
+  .badge {
+    display: inline-block; font-size: 8pt; font-weight: 700; padding: 0.5mm 2mm;
+    border-radius: 3mm; color: #fff; margin-right: 1.5mm;
+  }
+  .b-domain { background: #14425f; }
+  .b-app { background: #1f7a6c; }
+  .b-infra { background: #a05a1f; }
+  .b-config { background: #6b4fa0; }
+  .callout {
+    background: #eef6f4; border-left: 4px solid #1f7a6c; padding: 3mm 4mm;
+    margin: 3mm 0; font-size: 9.7pt;
+  }
+  .callout.warn { background: #fbf1e8; border-left-color: #a05a1f; }
+  code.inline {
+    background: #eef1f4; border-radius: 2px; padding: 0.3mm 1.2mm; font-size: 9.3pt; color: #0f2a43;
+  }
+  pre {
+    background: #0f2a43; color: #e7edf2; padding: 3mm 4mm; border-radius: 2mm;
+    font-size: 8.6pt; line-height: 1.45; overflow-x: auto; margin: 3mm 0;
+  }
+  ul, ol { margin: 0 0 3mm 0; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+  .toc-list { list-style: none; padding: 0; }
+  .toc-list li { padding: 1.5mm 0; border-bottom: 1px dotted #cdd6de; font-size: 10.5pt; }
+  .footer-note { font-size: 8pt; color: #8a95a3; margin-top: 8mm; text-align: center; }
+  svg { max-width: 100%; }
+</style>
+</head>
+<body>
+
+<!-- CAPA -->
+<section class="cover">
+  <div class="kicker">Documentação Técnica</div>
+  <h1>Outbox Pattern<br>Demonstração</h1>
+  <div class="sub">Kotlin + Spring Boot 4 + MongoDB + Kafka — arquitetura hexagonal, domínio, camadas de resiliência e decisões técnicas.</div>
+  <div class="meta">
+    <div>Público-alvo: desenvolvedores/manutenção do código</div>
+    <div>Versão da aplicação: 0.0.1-SNAPSHOT</div>
+    <div>Documento gerado em: agosto de 2026</div>
+    <div>Repositório: outbox-pattern-demonstration</div>
+  </div>
+</section>
+
+<!-- SUMÁRIO -->
+<section class="page-break">
+  <h2>Sumário</h2>
+  <ul class="toc-list">
+    <li>1. Objetivo e escopo da POC</li>
+    <li>2. Arquitetura — Hexagonal + DDD</li>
+    <li>3. Domínio (linguagem ubíqua)</li>
+    <li>4. Camada de aplicação (usecases)</li>
+    <li>5. Infraestrutura</li>
+    <li>6. Fluxo completo, passo a passo</li>
+    <li>7. Camadas de resiliência do Outbox Pattern</li>
+    <li>8. Decisões técnicas e trade-offs</li>
+    <li>9. Referência de classes por camada</li>
+    <li>10. Lições aprendidas na implementação</li>
+    <li>11. Como rodar e testar</li>
+  </ul>
+</section>
+
+<!-- 1. OBJETIVO -->
+<section class="page-break">
+  <h2>1. Objetivo e escopo da POC</h2>
+  <p>
+    Este projeto é uma prova de conceito (POC) que demonstra a implementação do
+    <strong>Outbox Pattern</strong> — um padrão de integração que garante a publicação
+    confiável de eventos (aqui, num tópico Kafka) mesmo diante de falhas, sem perder
+    mensagem e sem publicar antes da transação de negócio ser confirmada.
+  </p>
+  <p>
+    O domínio escolhido é propositalmente simples (criação de uma <code class="inline">Proposta</code>
+    de crédito) para que a complexidade da demonstração fique concentrada no padrão de
+    integração em si, não nas regras de negócio.
+  </p>
+  <p>A demo sobe inteira com um único comando (<code class="inline">docker-compose up -d</code>),
+  incluindo a própria aplicação — nenhum passo manual é necessário na apresentação.</p>
+  <h3>Stack técnica</h3>
+  <table>
+    <tr><th>Camada</th><th>Tecnologia</th><th>Observação</th></tr>
+    <tr><td>Linguagem / Runtime</td><td>Kotlin + Java 21</td><td>Gradle Kotlin DSL</td></tr>
+    <tr><td>Framework</td><td>Spring Boot 4.1.0 (Spring Framework 7.0.8)</td><td>—</td></tr>
+    <tr><td>Persistência</td><td>MongoDB (Spring Data MongoDB)</td><td>Replica-set single-node — necessário para transação multi-documento (Proposta + OutboxEvent)</td></tr>
+    <tr><td>Mensageria</td><td>Apache Kafka (KRaft, sem Zookeeper)</td><td>Serialização Avro, sem Schema Registry</td></tr>
+    <tr><td>Resiliência</td><td>Resilience4j (Circuit Breaker + Retry)</td><td>No consumer Kafka</td></tr>
+    <tr><td>Documentação de API</td><td>springdoc-openapi (Swagger UI)</td><td>—</td></tr>
+    <tr><td>Observabilidade da demo</td><td>Kafka UI, Mongo Express</td><td>Camada de demonstração, não faz parte da app</td></tr>
+  </table>
+</section>
+
+<!-- 2. ARQUITETURA -->
+<section class="page-break">
+  <h2>2. Arquitetura — Hexagonal + DDD</h2>
+  <p>
+    O código é organizado em camadas isoladas por dependência, seguindo Arquitetura
+    Hexagonal (Ports &amp; Adapters) combinada com conceitos de Domain-Driven Design.
+    A regra central: <strong>o domínio nunca conhece infraestrutura</strong> — nem Spring,
+    nem Mongo, nem Kafka.
+  </p>
+
+  <svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif">
+    <circle cx="360" cy="190" r="170" fill="#eef3f6" stroke="#a05a1f" stroke-width="2" stroke-dasharray="6,4"/>
+    <circle cx="360" cy="190" r="115" fill="#eef6f4" stroke="#1f7a6c" stroke-width="2" stroke-dasharray="6,4"/>
+    <circle cx="360" cy="190" r="60" fill="#0f2a43"/>
+    <text x="360" y="185" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="700">Domínio</text>
+    <text x="360" y="203" text-anchor="middle" fill="#cfe0ee" font-size="10">Proposta, OutboxEvent</text>
+    <text x="360" y="90" text-anchor="middle" fill="#14425f" font-size="13" font-weight="700">Aplicação (usecases)</text>
+    <text x="360" y="315" text-anchor="middle" fill="#7a4a1a" font-size="13" font-weight="700">Infraestrutura (adapters)</text>
+
+    <!-- Adapters de entrada -->
+    <rect x="10" y="150" width="120" height="34" rx="4" fill="#a05a1f"/>
+    <text x="70" y="171" text-anchor="middle" fill="#fff" font-size="10.5">PropostaController</text>
+    <rect x="10" y="196" width="120" height="34" rx="4" fill="#a05a1f"/>
+    <text x="70" y="217" text-anchor="middle" fill="#fff" font-size="10.5">PropostaListener</text>
+    <rect x="10" y="242" width="120" height="34" rx="4" fill="#a05a1f"/>
+    <text x="70" y="263" text-anchor="middle" fill="#fff" font-size="10.5">Scheduler</text>
+
+    <!-- Adapters de saída -->
+    <rect x="590" y="150" width="120" height="34" rx="4" fill="#a05a1f"/>
+    <text x="650" y="171" text-anchor="middle" fill="#fff" font-size="10.5">Mongo Adapters</text>
+    <rect x="590" y="196" width="120" height="34" rx="4" fill="#a05a1f"/>
+    <text x="650" y="217" text-anchor="middle" fill="#fff" font-size="10.5">PropostaProducer</text>
+
+    <!-- Setas -->
+    <line x1="130" y1="167" x2="205" y2="167" stroke="#45566b" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <line x1="590" y1="167" x2="515" y2="167" stroke="#45566b" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L6,3 L0,6 Z" fill="#45566b"/>
+      </marker>
+    </defs>
+  </svg>
+
+  <h3>Estrutura de pacotes</h3>
+  <table>
+    <tr><th>Pacote</th><th>Conteúdo</th></tr>
+    <tr><td><code class="inline">domain/model</code></td><td>Proposta, StatusPropostaEnum, TipoAmortizacaoEnum, OutboxEvent, OutboxStatusEnum — Kotlin puro, sem anotação de Mongo/Spring</td></tr>
+    <tr><td><code class="inline">domain/event</code></td><td>PropostaCriadaEvent — fato de negócio imutável, payload publicado no Kafka</td></tr>
+    <tr><td><code class="inline">domain/exception</code></td><td>PropostaNaoEncontradaException</td></tr>
+    <tr><td><code class="inline">domain/port/input</code></td><td>Contratos que a aplicação oferece: CriarPropostaInputPort, ProcessarPropostaInputPort, ReprocessarOutboxInputPort</td></tr>
+    <tr><td><code class="inline">domain/port/output</code></td><td>Contratos que a infra precisa cumprir: PropostaOutputPort, OutboxOutputPort, PropostaEventPublisherOutputPort</td></tr>
+    <tr><td><code class="inline">application/usecase</code></td><td>CriarPropostaUsecase, ProcessarPropostaUsecase, ReprocessarOutboxUsecase — implementam os InputPort, orquestram domínio + OutputPort. É aqui que mora a transação.</td></tr>
+    <tr><td><code class="inline">infrastructure/input/rest</code></td><td>PropostaController + DTOs</td></tr>
+    <tr><td><code class="inline">infrastructure/input/kafka</code></td><td>PropostaListener (consumer)</td></tr>
+    <tr><td><code class="inline">infrastructure/output/persistence/mongo</code></td><td>Documents, Repositories (Spring Data), Adapters, Mappers</td></tr>
+    <tr><td><code class="inline">infrastructure/output/messaging/kafka</code></td><td>PropostaProducer (publisher) + classe Avro gerada</td></tr>
+    <tr><td><code class="inline">infrastructure/scheduler</code></td><td>OutboxReprocessamentoScheduler</td></tr>
+    <tr><td><code class="inline">config</code></td><td>MongoConfig, KafkaConfig, ResilienceConfig, OpenApiConfig</td></tr>
+  </table>
+
+  <h3>Convenção de sufixos</h3>
+  <table>
+    <tr><th>Sufixo</th><th>Papel</th></tr>
+    <tr><td><code class="inline">*Usecase</code></td><td>Caso de uso — orquestra domínio + ports, dono da transação</td></tr>
+    <tr><td><code class="inline">*InputPort</code></td><td>Porta de entrada (interface) — o que a aplicação oferece</td></tr>
+    <tr><td><code class="inline">*OutputPort</code></td><td>Porta de saída (interface) — o que a infra precisa cumprir</td></tr>
+    <tr><td><code class="inline">*Adapter</code></td><td>Implementação de output port na infraestrutura</td></tr>
+    <tr><td><code class="inline">*Controller / *Listener / *Producer</code></td><td>Adapters de entrada/saída HTTP e Kafka</td></tr>
+    <tr><td><code class="inline">*Document / *Repository / *Mapper</code></td><td>Persistência Mongo — nunca é o domínio</td></tr>
+    <tr><td><code class="inline">*Dto</code></td><td>Entrada/saída HTTP — nunca expõe o domínio direto</td></tr>
+    <tr><td><code class="inline">*Config / *Scheduler / *Exception</code></td><td>Configuração técnica, job agendado, exceção de domínio/aplicação</td></tr>
+  </table>
+</section>
+
+<!-- 3. DOMÍNIO -->
+<section class="page-break">
+  <h2>3. Domínio (linguagem ubíqua)</h2>
+
+  <h3><span class="badge b-domain">domain</span>Proposta (Aggregate Root)</h3>
+  <p>Representa uma proposta de financiamento em processamento assíncrono via Outbox Pattern.</p>
+  <table>
+    <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+    <tr><td>id</td><td>String?</td><td>Nulo até ser persistida</td></tr>
+    <tr><td>status</td><td>StatusPropostaEnum</td><td>EM_ANDAMENTO ou PROCESSADA</td></tr>
+    <tr><td>tipoAmortizacao</td><td>TipoAmortizacaoEnum</td><td>SAC ou PRICE</td></tr>
+    <tr><td>criadaEm</td><td>Instant</td><td>Momento da criação</td></tr>
+  </table>
+  <div class="callout">
+    <strong>Regra de negócio:</strong> toda Proposta nasce <code class="inline">EM_ANDAMENTO</code>
+    (via <code class="inline">Proposta.nova()</code>) e só transiciona para <code class="inline">PROCESSADA</code>
+    quando o evento correspondente é consumido com sucesso — nunca por criação direta.
+  </div>
+
+  <h3><span class="badge b-domain">domain</span>OutboxEvent</h3>
+  <p>Registro de outbox — garante que a publicação de um evento de domínio só é tentada
+  depois que a transação que o originou foi de fato commitada. Persistido na MESMA
+  transação Mongo do agregado que o originou.</p>
+  <table>
+    <tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr>
+    <tr><td>aggregateId</td><td>String</td><td>Id da Proposta associada</td></tr>
+    <tr><td>eventType</td><td>String</td><td>"PropostaCriada" (único tipo nesta POC)</td></tr>
+    <tr><td>payload</td><td>String</td><td>JSON do PropostaCriadaEvent — permite ao Scheduler republicar sem reconsultar o agregado original</td></tr>
+    <tr><td>status</td><td>OutboxStatusEnum</td><td>Ver ciclo de vida abaixo</td></tr>
+    <tr><td>tentativas</td><td>Int</td><td>Contador de tentativas de reprocessamento</td></tr>
+    <tr><td>claimedBy / claimExpiraEm</td><td>String? / Instant?</td><td>Claim atômico do Scheduler — dono + expiração do lease</td></tr>
+    <tr><td>proximaTentativaEm</td><td>Instant?</td><td>Backoff exponencial — Scheduler ignora o registro enquanto no futuro</td></tr>
+  </table>
+
+  <h4>Ciclo de vida — OutboxStatusEnum</h4>
+  <svg viewBox="0 0 700 110" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif" font-size="10.5">
+    <rect x="10" y="30" width="120" height="40" rx="5" fill="#14425f"/>
+    <text x="70" y="54" text-anchor="middle" fill="#fff">PENDENTE</text>
+    <rect x="200" y="30" width="150" height="40" rx="5" fill="#6b4fa0"/>
+    <text x="275" y="54" text-anchor="middle" fill="#fff">EM_PROCESSAMENTO</text>
+    <rect x="420" y="0" width="120" height="40" rx="5" fill="#1f7a6c"/>
+    <text x="480" y="24" text-anchor="middle" fill="#fff">ENVIADO</text>
+    <rect x="420" y="70" width="150" height="40" rx="5" fill="#a02f2f"/>
+    <text x="495" y="94" text-anchor="middle" fill="#fff">FALHA_DEFINITIVA</text>
+    <line x1="130" y1="50" x2="198" y2="50" stroke="#45566b" stroke-width="1.5" marker-end="url(#a2)"/>
+    <line x1="350" y1="42" x2="418" y2="22" stroke="#45566b" stroke-width="1.5" marker-end="url(#a2)"/>
+    <line x1="350" y1="58" x2="418" y2="90" stroke="#45566b" stroke-width="1.5" marker-end="url(#a2)"/>
+    <path d="M275,30 C275,-10 130,-10 90,28" stroke="#45566b" stroke-width="1.3" fill="none" marker-end="url(#a2)"/>
+    <text x="170" y="8" text-anchor="middle" fill="#6b7686" font-size="8.5">reagenda (backoff) se falhar e ainda houver tentativas</text>
+    <defs><marker id="a2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#45566b"/></marker></defs>
+  </svg>
+
+  <h3><span class="badge b-domain">domain</span>PropostaCriadaEvent (Domain Event)</h3>
+  <p>Fato de negócio imutável de que uma Proposta foi criada. É exatamente o payload
+  publicado no tópico Kafka <code class="inline">proposta-events</code> (via Avro) — carrega
+  tudo que o consumidor precisa (propostaId, status, tipoAmortizacao, criadaEm), então o
+  Listener nunca reconsulta a Proposta para montar sua reação.</p>
+
+  <h3><span class="badge b-domain">domain</span>PropostaNaoEncontradaException</h3>
+  <p>Lançada quando o Listener recebe um evento cujo <code class="inline">propostaId</code>
+  não existe no Mongo — cenário anômalo, diferente de uma duplicata legítima (que é
+  idempotência tratada normalmente).</p>
+</section>
+
+<!-- 4. APLICAÇÃO -->
+<section class="page-break">
+  <h2>4. Camada de aplicação (usecases)</h2>
+
+  <h3><span class="badge b-app">application</span>CriarPropostaUsecase</h3>
+  <p>Implementa <code class="inline">CriarPropostaInputPort</code>. É o núcleo do Outbox
+  Pattern nesta POC:</p>
+  <ol>
+    <li><code class="inline">@Transactional</code> — grava Proposta e OutboxEvent (status PENDENTE) na mesma transação Mongo.</li>
+    <li>Publica um evento de aplicação em memória (Spring <code class="inline">ApplicationEventPublisher</code>) — não é o Kafka ainda.</li>
+    <li><code class="inline">aoConfirmarCriacao</code>, anotado com <code class="inline">@TransactionalEventListener(phase = AFTER_COMMIT)</code>,
+    só executa se a transação commitar — é o <strong>fast-path</strong>: publica no Kafka e, em caso de sucesso,
+    marca o OutboxEvent como ENVIADO. Falha aqui não tenta de novo na hora — fica PENDENTE para o Scheduler.</li>
+  </ol>
+
+  <h3><span class="badge b-app">application</span>ProcessarPropostaUsecase</h3>
+  <p>Implementa <code class="inline">ProcessarPropostaInputPort</code>, acionado pelo
+  <code class="inline">PropostaListener</code>. Idempotente por construção: checa o status
+  atual antes de transicionar — se já PROCESSADA, ignora (o Outbox Pattern só garante
+  <em>at-least-once delivery</em>, então duplicata é esperada, não erro).</p>
+  <pre>@CircuitBreaker(name = "processar-proposta")
+@Retry(name = "processar-proposta")
+override fun processar(propostaId: String) {
+    val proposta = propostaOutputPort.buscarPorId(propostaId)
+        ?: throw PropostaNaoEncontradaException(propostaId)
+    if (proposta.status == PROCESSADA) return // idempotência
+    propostaOutputPort.salvar(proposta.copy(status = PROCESSADA))
+}</pre>
+  <p><code class="inline">@Retry</code> (interno) tenta de novo em falhas transitórias;
+  <code class="inline">@CircuitBreaker</code> (externo) avalia o resultado da sequência
+  inteira de tentativas e abre o circuito se as falhas persistirem.</p>
+
+  <h3><span class="badge b-app">application</span>ReprocessarOutboxUsecase</h3>
+  <p>Implementa <code class="inline">ReprocessarOutboxInputPort</code>, acionado pelo
+  Scheduler. Único componente que reconsulta o outbox por polling. Em cada rodada
+  (até <code class="inline">LOTE_MAXIMO = 50</code> registros):</p>
+  <ol>
+    <li>Reivindica atomicamente o próximo OutboxEvent elegível (claim).</li>
+    <li>Desserializa o payload de volta para <code class="inline">PropostaCriadaEvent</code>.</li>
+    <li>Tenta republicar. Sucesso → ENVIADO.</li>
+    <li>Falha → incrementa tentativas; se atingiu o limite, FALHA_DEFINITIVA; senão reagenda com backoff exponencial.</li>
+    <li>eventType desconhecido/payload corrompido ("poison message") vai direto para FALHA_DEFINITIVA, sem gastar tentativas.</li>
+  </ol>
+</section>
+
+<!-- 5. INFRAESTRUTURA -->
+<section class="page-break">
+  <h2>5. Infraestrutura</h2>
+
+  <h3><span class="badge b-infra">infra</span>REST — PropostaController</h3>
+  <table>
+    <tr><th>Endpoint</th><th>Descrição</th></tr>
+    <tr><td><code class="inline">POST /api/propostas</code></td><td>Cria uma Proposta (body: PropostaRequestDto) → 201 com PropostaResponseDto</td></tr>
+  </table>
+  <p>DTOs nunca expõem o domínio direto; a conversão é feita nos próprios objetos
+  (<code class="inline">PropostaResponseDto.deDominio(...)</code>).</p>
+
+  <h3><span class="badge b-infra">infra</span>Persistência Mongo</h3>
+  <table>
+    <tr><th>Coleção</th><th>Documento</th><th>Observação</th></tr>
+    <tr><td>propostas</td><td>PropostaDocument</td><td>Espelho de Proposta</td></tr>
+    <tr><td>outbox_events</td><td>OutboxDocument</td><td>Espelho de OutboxEvent, inclui campos de claim/backoff</td></tr>
+  </table>
+  <p><code class="inline">OutboxRepositoryAdapter.reivindicarProximoPendente</code> usa
+  <code class="inline">MongoTemplate.findAndModify</code> (atômico) — mesmo com duas
+  instâncias da app rodando a mesma query ao mesmo tempo, só uma "vence" o claim de um
+  dado documento.</p>
+
+  <h3><span class="badge b-infra">infra</span>Mensageria Kafka + Avro</h3>
+  <table>
+    <tr><th>Componente</th><th>Papel</th></tr>
+    <tr><td>PropostaProducer</td><td>Implementa PropostaEventPublisherOutputPort. Serializa Avro binário manualmente (sem header do Confluent Schema Registry), publica em <code class="inline">proposta-events</code> usando propostaId como chave de partição. Aguarda confirmação com timeout de 5s.</td></tr>
+    <tr><td>PropostaListener</td><td>Consumer group isolado <code class="inline">proposta-listener</code>. Desserializa o mesmo Avro binário e aciona ProcessarPropostaInputPort.</td></tr>
+    <tr><td>Schema Avro</td><td><code class="inline">src/main/avro/proposta_criada_event.avsc</code> — versionado no repositório, gerado via plugin Gradle Avro</td></tr>
+  </table>
+
+  <h3><span class="badge b-infra">infra</span>OutboxReprocessamentoScheduler</h3>
+  <p><code class="inline">@Scheduled(fixedDelayString = "${outbox.scheduler.fixed-delay-ms:5000}")</code>.
+  Opt-in via <code class="inline">outbox.scheduler.enabled</code> — desabilitar não quebra
+  o fluxo síncrono. Gera um id de instância aleatório (<code class="inline">dono</code>) por startup, usado no claim atômico.</p>
+
+  <h3><span class="badge b-config">config</span>Classes de configuração</h3>
+  <table>
+    <tr><th>Classe</th><th>Responsabilidade</th></tr>
+    <tr><td>MongoConfig</td><td>Registra o <code class="inline">MongoTransactionManager</code> — sem ele, <code class="inline">@Transactional</code> não teria efeito</td></tr>
+    <tr><td>KafkaConfig</td><td><code class="inline">@EnableKafka</code>; producer/consumer factories (bytes crus); <code class="inline">DefaultErrorHandler</code> + <code class="inline">DeadLetterPublishingRecoverer</code> apontando explicitamente para <code class="inline">proposta-events.DLT</code></td></tr>
+    <tr><td>ResilienceConfig</td><td>Loga toda tentativa de retry e transição de estado do Circuit Breaker (observabilidade da demo)</td></tr>
+    <tr><td>OpenApiConfig</td><td>Metadados do Swagger UI</td></tr>
+  </table>
+</section>
+
+<!-- 6. FLUXO -->
+<section class="page-break">
+  <h2>6. Fluxo completo, passo a passo</h2>
+  <ol>
+    <li><strong>POST /api/propostas</strong> — cria Proposta (EM_ANDAMENTO) + OutboxEvent (PENDENTE) na mesma transação Mongo.</li>
+    <li><strong>Fast-path</strong> — após o commit, publica imediatamente no Kafka (Avro, chave = propostaId). Sucesso → OutboxEvent vira ENVIADO.</li>
+    <li><strong>Fallback (Scheduler)</strong> — cobre o que o fast-path não confirmou (crash, Kafka fora do ar): claim atômico dos PENDENTE elegíveis, republica com backoff exponencial; após o limite de tentativas, FALHA_DEFINITIVA.</li>
+    <li><strong>Consumo</strong> — PropostaListener consome o tópico, aciona ProcessarPropostaUsecase com Circuit Breaker + Retry.</li>
+    <li><strong>Idempotência</strong> — se a Proposta já está PROCESSADA, a mensagem é ignorada (no-op) — esperado sob at-least-once delivery.</li>
+    <li><strong>Falha definitiva de processamento</strong> — Circuit Breaker/Retry exauridos → mensagem original vai para a DLT (<code class="inline">proposta-events.DLT</code>), visível no Kafka UI.</li>
+  </ol>
+
+  <svg viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, Arial, sans-serif" font-size="10">
+    <rect x="10" y="20" width="130" height="46" rx="5" fill="#0f2a43"/>
+    <text x="75" y="40" text-anchor="middle" fill="#fff" font-size="10.5">POST</text>
+    <text x="75" y="55" text-anchor="middle" fill="#cfe0ee" font-size="9">Proposta + Outbox</text>
+
+    <rect x="190" y="20" width="130" height="46" rx="5" fill="#1f7a6c"/>
+    <text x="255" y="40" text-anchor="middle" fill="#fff" font-size="10.5">Fast-path</text>
+    <text x="255" y="55" text-anchor="middle" fill="#dff2ee" font-size="9">AFTER_COMMIT</text>
+
+    <rect x="370" y="20" width="130" height="46" rx="5" fill="#14425f"/>
+    <text x="435" y="40" text-anchor="middle" fill="#fff" font-size="10.5">Kafka</text>
+    <text x="435" y="55" text-anchor="middle" fill="#cfe0ee" font-size="9">proposta-events</text>
+
+    <rect x="550" y="20" width="150" height="46" rx="5" fill="#a05a1f"/>
+    <text x="625" y="40" text-anchor="middle" fill="#fff" font-size="10.5">Listener</text>
+    <text x="625" y="55" text-anchor="middle" fill="#f6e6d6" font-size="9">CB + Retry</text>
+
+    <rect x="190" y="120" width="130" height="46" rx="5" fill="#6b4fa0"/>
+    <text x="255" y="140" text-anchor="middle" fill="#fff" font-size="10.5">Scheduler</text>
+    <text x="255" y="155" text-anchor="middle" fill="#e9e1f4" font-size="9">fallback + backoff</text>
+
+    <rect x="550" y="120" width="150" height="46" rx="5" fill="#a02f2f"/>
+    <text x="625" y="140" text-anchor="middle" fill="#fff" font-size="10.5">DLT</text>
+    <text x="625" y="155" text-anchor="middle" fill="#f5d9d9" font-size="9">proposta-events.DLT</text>
+
+    <rect x="370" y="120" width="130" height="46" rx="5" fill="#1f7a6c"/>
+    <text x="435" y="140" text-anchor="middle" fill="#fff" font-size="10.5">PROCESSADA</text>
+    <text x="435" y="155" text-anchor="middle" fill="#dff2ee" font-size="9">idempotente</text>
+
+    <line x1="140" y1="43" x2="188" y2="43" stroke="#45566b" stroke-width="1.6" marker-end="url(#a3)"/>
+    <line x1="320" y1="43" x2="368" y2="43" stroke="#45566b" stroke-width="1.6" marker-end="url(#a3)"/>
+    <line x1="500" y1="43" x2="548" y2="43" stroke="#45566b" stroke-width="1.6" marker-end="url(#a3)"/>
+    <line x1="255" y1="66" x2="255" y2="118" stroke="#45566b" stroke-width="1.6" marker-end="url(#a3)" stroke-dasharray="4,3"/>
+    <text x="270" y="95" fill="#6b7686" font-size="8.5">se falhar</text>
+    <line x1="320" y1="143" x2="368" y2="143" stroke="#45566b" stroke-width="1.6" marker-end="url(#a3)" stroke-dasharray="4,3"/>
+    <line x1="625" y1="66" x2="625" y2="118" stroke="#45566b" stroke-width="1.6" marker-end="url(#a3)" stroke-dasharray="4,3"/>
+    <text x="640" y="95" fill="#6b7686" font-size="8.5">CB/Retry esgotados</text>
+    <line x1="500" y1="143" x2="548" y2="65" stroke="#45566b" stroke-width="1.6" marker-end="url(#a3)"/>
+    <defs><marker id="a3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#45566b"/></marker></defs>
+  </svg>
+</section>
+
+<!-- 7. RESILIÊNCIA -->
+<section class="page-break">
+  <h2>7. Camadas de resiliência</h2>
+  <table>
+    <tr><th>Camada</th><th>Cobre</th><th>Mecanismo</th></tr>
+    <tr><td>Fast-path pós-commit</td><td>Caminho feliz — latência mínima</td><td>@TransactionalEventListener(AFTER_COMMIT)</td></tr>
+    <tr><td>Scheduler de fallback</td><td>Kafka fora do ar no momento da criação, crash entre commit e publish</td><td>Claim atômico (findAndModify, dono+expiração) + backoff exponencial (5s → 300s) + limite de tentativas (default 5) → FALHA_DEFINITIVA</td></tr>
+    <tr><td>Circuit Breaker + Retry (consumo)</td><td>Falha transitória ao processar (ex.: Mongo instável)</td><td>Resilience4j — 3 tentativas, circuito abre com ≥50% de falha numa janela de 10 chamadas (mínimo 5)</td></tr>
+    <tr><td>Dead Letter Topic</td><td>Falha definitiva de processamento (CB/Retry exauridos) ou mensagem corrompida</td><td>DefaultErrorHandler + DeadLetterPublishingRecoverer → proposta-events.DLT</td></tr>
+  </table>
+  <div class="callout warn">
+    <strong>Nota de design:</strong> o Resilience4j faz o retry <em>dentro</em> do usecase;
+    o container Kafka é configurado com <code class="inline">FixedBackOff(0, 0)</code> —
+    não tenta de novo por conta própria, evitando duplicar a lógica de retry em duas camadas.
+  </div>
+</section>
+
+<!-- 8. TRADE-OFFS -->
+<section class="page-break">
+  <h2>8. Decisões técnicas e trade-offs</h2>
+
+  <h3>Polling Publisher vs. CDC (Change Data Capture)</h3>
+  <table>
+    <tr><th></th><th>Polling Publisher (usado nesta POC)</th><th>CDC (Debezium / Change Streams)</th></tr>
+    <tr><td>Como funciona</td><td>Processo consulta a coleção outbox periodicamente</td><td>Lê o log de transação do banco</td></tr>
+    <tr><td>Latência</td><td>Segundos (configurável)</td><td>Milissegundos</td></tr>
+    <tr><td>Infraestrutura extra</td><td>Nenhuma</td><td>Kafka Connect + operação de um connector</td></tr>
+    <tr><td>Quando usar</td><td>Protótipos, POCs, clareza didática</td><td>Produção em alta escala</td></tr>
+  </table>
+  <p><strong>Decisão consciente para esta POC:</strong> Polling (fast-path pós-commit +
+  Scheduler de fallback), sem Debezium/Change Streams — infraestrutura extra não se paga
+  para uma demonstração; o objetivo é clareza didática do padrão, não throughput de produção.</p>
+
+  <h3>At-least-once + idempotência (não exactly-once)</h3>
+  <p>O Outbox Pattern garante que a mensagem <em>será</em> entregue, mas não garante entrega
+  única. A escolha de projeto foi assumir isso explicitamente: o consumidor <strong>precisa</strong>
+  ser idempotente (checar o status atual antes de agir), em vez de tentar (inutilmente)
+  garantir exactly-once na infraestrutura.</p>
+
+  <h3>Sem Schema Registry</h3>
+  <p>O schema Avro é versionado no próprio repositório (<code class="inline">src/main/avro</code>),
+  sem Confluent Schema Registry. Trade-off aceitável numa POC com um único produtor/consumidor
+  e um único tipo de evento — não escalaria bem com múltiplos times/schemas evoluindo
+  independentemente.</p>
+
+  <h3>MongoDB único (não DocumentDB)</h3>
+  <p>O container <code class="inline">mongo</code> real (replica-set single-node) representa
+  o Amazon DocumentDB (wire-compatible) sem custo — DocumentDB só é suportado na imagem PRO
+  do LocalStack, incompatível com o objetivo de demo 100% gratuita.</p>
+
+  <h3>Recursos AWS/LocalStack removidos</h3>
+  <p>Estava planejado usar LocalStack para simular AWS Secrets Manager. A decisão final foi
+  remover completamente essa camada: nenhuma credencial sensível real precisa ser gerenciada
+  nesta POC, e a complexidade extra não se justificava para o objetivo da demonstração.</p>
+</section>
+
+<!-- 9. REFERÊNCIA -->
+<section class="page-break">
+  <h2>9. Referência de classes por camada</h2>
+  <table>
+    <tr><th>Classe</th><th>Camada</th><th>Papel</th></tr>
+    <tr><td>Proposta</td><td>domain/model</td><td>Aggregate Root</td></tr>
+    <tr><td>StatusPropostaEnum</td><td>domain/model</td><td>EM_ANDAMENTO / PROCESSADA</td></tr>
+    <tr><td>TipoAmortizacaoEnum</td><td>domain/model</td><td>SAC / PRICE</td></tr>
+    <tr><td>OutboxEvent</td><td>domain/model</td><td>Registro de outbox</td></tr>
+    <tr><td>OutboxStatusEnum</td><td>domain/model</td><td>PENDENTE / EM_PROCESSAMENTO / ENVIADO / FALHA_DEFINITIVA</td></tr>
+    <tr><td>PropostaCriadaEvent</td><td>domain/event</td><td>Domain Event / payload Kafka</td></tr>
+    <tr><td>PropostaNaoEncontradaException</td><td>domain/exception</td><td>Exceção de aplicação</td></tr>
+    <tr><td>CriarPropostaInputPort / ProcessarPropostaInputPort / ReprocessarOutboxInputPort</td><td>domain/port/input</td><td>Contratos de entrada</td></tr>
+    <tr><td>PropostaOutputPort / OutboxOutputPort / PropostaEventPublisherOutputPort</td><td>domain/port/output</td><td>Contratos de saída</td></tr>
+    <tr><td>CriarPropostaUsecase</td><td>application/usecase</td><td>Cria Proposta + Outbox, fast-path</td></tr>
+    <tr><td>ProcessarPropostaUsecase</td><td>application/usecase</td><td>Consome evento, idempotente, CB+Retry</td></tr>
+    <tr><td>ReprocessarOutboxUsecase</td><td>application/usecase</td><td>Fallback do Scheduler</td></tr>
+    <tr><td>PropostaController</td><td>infrastructure/input/rest</td><td>POST /api/propostas</td></tr>
+    <tr><td>PropostaListener</td><td>infrastructure/input/kafka</td><td>Consumer Kafka</td></tr>
+    <tr><td>PropostaDocument / PropostaMongoRepository / PropostaRepositoryAdapter / PropostaMapper</td><td>infrastructure/output/persistence/mongo</td><td>Persistência da Proposta</td></tr>
+    <tr><td>OutboxDocument / OutboxMongoRepository / OutboxRepositoryAdapter / OutboxMapper</td><td>infrastructure/output/persistence/mongo</td><td>Persistência do outbox + claim atômico</td></tr>
+    <tr><td>PropostaProducer</td><td>infrastructure/output/messaging/kafka</td><td>Publisher Avro</td></tr>
+    <tr><td>OutboxReprocessamentoScheduler</td><td>infrastructure/scheduler</td><td>Job agendado</td></tr>
+    <tr><td>MongoConfig / KafkaConfig / ResilienceConfig / OpenApiConfig</td><td>config</td><td>Configuração técnica</td></tr>
+  </table>
+</section>
+
+<!-- 10. LIÇÕES -->
+<section class="page-break">
+  <h2>10. Lições aprendidas na implementação</h2>
+  <p>Problemas reais encontrados rodando a aplicação de ponta a ponta — nenhum deles
+  aparecia como erro de compilação ou exceção no boot, o que reforça a importância de
+  validar cenários de falha na prática, não só ler o código.</p>
+
+  <h4>Spring Boot 4.1 usa Jackson 3 por padrão</h4>
+  <p>O <code class="inline">ObjectMapper</code> autoconfigurado é <code class="inline">tools.jackson.databind.ObjectMapper</code>,
+  não <code class="inline">com.fasterxml.jackson.databind.ObjectMapper</code> — o pacote antigo
+  ainda compila (está no classpath transitivamente), mas a injeção falha silenciosamente no boot.</p>
+
+  <h4>CRLF quebrava scripts dentro dos containers Linux</h4>
+  <p><code class="inline">core.autocrlf=true</code> no Windows reescrevia <code class="inline">gradlew</code>
+  e os scripts de init a cada checkout, quebrando o shebang. Corrigido com <code class="inline">.gitattributes</code>
+  forçando <code class="inline">eol=lf</code>.</p>
+
+  <h4>Fast-path e Scheduler duplicavam publicação</h4>
+  <p>O Scheduler considerava qualquer PENDENTE elegível imediatamente, competindo com o
+  fast-path em quase toda criação. Corrigido com um período de carência antes de um
+  PENDENTE "de primeira tentativa" ficar elegível.</p>
+
+  <h4>PropostaProducer era fire-and-forget</h4>
+  <p><code class="inline">kafkaTemplate.send()</code> só lançava exceção de forma assíncrona
+  (futuro nunca inspecionado) — o fast-path/Scheduler nunca veriam uma falha real do Kafka.
+  Corrigido bloqueando em <code class="inline">.get(timeout)</code>.</p>
+
+  <h4>@EnableKafka ausente — Listener nunca era processado</h4>
+  <p>Sem erro, sem warning: o consumer simplesmente não inicializava. Confirmado só ao notar
+  que nenhum consumer group aparecia no Kafka.</p>
+
+  <h4>DeadLetterPublishingRecoverer — sufixo de tópico divergente</h4>
+  <p>O default do Spring Kafka 4.1 é <code class="inline">&lt;topico&gt;-dlt</code> (hífen), não
+  <code class="inline">.DLT</code> — publicava num tópico diferente do já provisionado.
+  Corrigido com um destination resolver explícito.</p>
+
+  <h4>@CircuitBreaker/@Retry ignorados silenciosamente</h4>
+  <p>Faltava <code class="inline">aspectjweaver</code> no classpath. Spring Boot 4 não tem mais
+  um <code class="inline">spring-boot-starter-aop</code> dedicado (módulos desmembrados).</p>
+
+  <h4>Timeout do Mongo (30s default) tornava falhas lentas de diagnosticar</h4>
+  <p>Reduzido para 5s via <code class="inline">serverSelectionTimeoutMS</code> na URI — mesmo
+  raciocínio do <code class="inline">MAX_BLOCK_MS_CONFIG</code> do producer Kafka.</p>
+</section>
+
+<!-- 11. COMO RODAR -->
+<section class="page-break">
+  <h2>11. Como rodar e testar</h2>
+  <p>Pré-requisito único: Docker Desktop.</p>
+  <pre>docker-compose up -d</pre>
+  <p>Sobe Mongo (replica-set), Kafka (KRaft), a aplicação, Swagger UI, Kafka UI e Mongo
+  Express — sem nenhum passo manual adicional. Instruções completas de demonstração
+  (incluindo os cenários de falha) estão no <code class="inline">README.md</code> do
+  repositório.</p>
+  <table>
+    <tr><th>Serviço</th><th>URL</th></tr>
+    <tr><td>Swagger UI</td><td>http://localhost:8080/swagger-ui.html</td></tr>
+    <tr><td>Kafka UI</td><td>http://localhost:8082</td></tr>
+    <tr><td>Mongo Express</td><td>http://localhost:8081</td></tr>
+  </table>
+  <div class="footer-note">Outbox Pattern — Demonstração · Documentação Técnica · agosto de 2026</div>
+</section>
+
+</body>
+</html>
